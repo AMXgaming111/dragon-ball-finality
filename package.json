@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test-setup.js",
+    "setup": "node test-setup.js"
   },
   "keywords": ["discord", "bot", "rpg", "dragonball", "game"],
   "author": "Tarik",
