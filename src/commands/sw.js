@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
-const { hasStaffRole, staffRoleName } = require('../utils/config');
+const { staffRoleName } = require('../utils/config');
+const { hasStaffRole } = require('../utils/calculations');
 
 module.exports = {
     name: 'sw',
