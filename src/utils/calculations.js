@@ -209,6 +209,17 @@ function hasStaffRole(member, staffRoleName = 'Staff') {
     return member.roles.cache.some(role => role.name === staffRoleName);
 }
 
+// Calculate physical defense (blocking)
+function calculatePhysicalDefense(effectivePL, defense, additive = 0) {
+    return Math.floor(effectivePL * ((defense + additive) / 10));
+}
+
+// Calculate ki defense (blocking with ki enhancement)
+function calculateKiDefense(effectivePL, defense, multiplier = 1) {
+    const baseDefense = Math.floor(effectivePL * (defense / 10));
+    return Math.floor(baseDefense * multiplier);
+}
+
 // Generate health bar visualization
 function generateHealthBar(healthPercentage, emojiId = '1400942686495572041') {
     const clampedPercentage = Math.max(0, Math.min(120, healthPercentage));
@@ -221,9 +232,30 @@ function generateHealthBar(healthPercentage, emojiId = '1400942686495572041') {
     else if (clampedPercentage >= 1) units = 1;
     else units = 0;
     
-    // Note: Since we can't use actual custom emojis in this example,
-    // we'll use placeholder representation
-    return '█'.repeat(units) + '░'.repeat(5 - units);
+    // Use custom emoji format for Discord
+    const healthEmoji = `<:health:${emojiId}>`;
+    const emptyEmoji = '▫️'; // Empty health unit
+    
+    return healthEmoji.repeat(units) + emptyEmoji.repeat(5 - units);
+}
+
+// Generate ki bar visualization
+function generateKiBar(kiPercentage, emojiId = '1400943268170301561') {
+    const clampedPercentage = Math.max(0, Math.min(120, kiPercentage));
+    
+    let units = 0;
+    if (clampedPercentage >= 100) units = 5;
+    else if (clampedPercentage >= 80) units = 4;
+    else if (clampedPercentage >= 50) units = 3;
+    else if (clampedPercentage >= 20) units = 2;
+    else if (clampedPercentage >= 1) units = 1;
+    else units = 0;
+    
+    // Use custom emoji format for Discord
+    const kiEmoji = `<:ki:${emojiId}>`;
+    const emptyEmoji = '▫️'; // Empty ki unit
+    
+    return kiEmoji.repeat(units) + emptyEmoji.repeat(5 - units);
 }
 
 module.exports = {
@@ -238,6 +270,8 @@ module.exports = {
     calculateAccuracy,
     calculateBlock,
     calculateDodge,
+    calculatePhysicalDefense,
+    calculateKiDefense,
     rollWithEffort,
     getEffortKiCost,
     calculateBlowback,
@@ -245,5 +279,6 @@ module.exports = {
     parseModifier,
     applyModifier,
     hasStaffRole,
-    generateHealthBar
+    generateHealthBar,
+    generateKiBar
 };

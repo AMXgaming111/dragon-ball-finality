@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { parseModifier, applyModifier, calculateMaxKi, calculateHealthPercentage, generateHealthBar } = require('../utils/calculations');
+const { parseModifier, applyModifier, calculateMaxKi, calculateHealthPercentage, generateKiBar } = require('../utils/calculations');
 
 module.exports = {
     name: 'ki',
@@ -107,8 +107,8 @@ module.exports = {
             const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
             const clampedPercentage = Math.max(0, Math.min(120, kiPercentage));
 
-            // Generate ki bar (using same function as health bar but with different emoji)
-            const kiBar = generateHealthBar(clampedPercentage).replace(/█/g, '🔷').replace(/░/g, '🔹');
+            // Generate ki bar with custom emoji
+            const kiBar = generateKiBar(clampedPercentage);
 
             // Create embed
             const embed = new EmbedBuilder()

@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { parseModifier, applyModifier, calculateMaxHealth, generateHealthBar } = require('../utils/calculations');
+const { parseModifier, applyModifier, calculateMaxHealth, generateHealthBar, calculateEffectivePL } = require('../utils/calculations');
 
 module.exports = {
     name: 'health',
@@ -36,18 +36,57 @@ module.exports = {
         }
 
         try {
-            // Get user's active character
+            // Get user's active character with form data
             const userData = await database.getUserWithActiveCharacter(targetUserId);
             if (!userData || !userData.active_character_id) {
                 const pronoun = targetUserId === message.author.id ? 'You don\'t' : `${targetUser.username} doesn't`;
                 return message.reply(`${pronoun} have an active character.`);
             }
 
-            // Calculate max health
-            const maxHealth = calculateMaxHealth(userData.base_pl, userData.endurance);
+            // Get active form data for health calculations
+            const activeForm = await database.get(`
+                SELECT f.name, f.pl_modifier, f.endurance_modifier, cf.is_active
+                FROM character_forms cf
+                JOIN forms f ON cf.form_key = f.form_key
+                WHERE cf.character_id = ? AND cf.is_active = 1
+                LIMIT 1
+            `, [userData.active_character_id]);
+
+            let formMultiplier = 1;
+            let enduranceModifier = 0;
+            let basePLModifier = 1;
+
+            if (activeForm) {
+                // Parse the old-style form modifiers
+                if (activeForm.pl_modifier) {
+                    // Parse modifier like "*5" or "+100"
+                    const plMod = activeForm.pl_modifier;
+                    if (plMod.startsWith('*')) {
+                        basePLModifier = parseFloat(plMod.substring(1)) || 1;
+                    } else if (plMod.startsWith('+')) {
+                        basePLModifier = 1 + (parseFloat(plMod.substring(1)) || 0);
+                    }
+                }
+                if (activeForm.endurance_modifier) {
+                    // Parse modifier like "+40" or "-10"
+                    const endMod = activeForm.endurance_modifier;
+                    if (endMod.startsWith('+')) {
+                        enduranceModifier = parseFloat(endMod.substring(1)) || 0;
+                    } else if (endMod.startsWith('-')) {
+                        enduranceModifier = -(parseFloat(endMod.substring(1)) || 0);
+                    }
+                }
+            }
+
+            // Calculate modified stats
+            const modifiedBasePL = userData.base_pl * basePLModifier;
+            const modifiedEndurance = userData.endurance + enduranceModifier;
+            
+            // Calculate max health with form modifications
+            const maxHealth = Math.floor(modifiedBasePL * modifiedEndurance);
             let currentHealth = userData.current_health;
 
-            // Set default if null
+            // Set default if null (use percentage of new max if form changed)
             if (currentHealth === null) {
                 currentHealth = maxHealth;
                 await database.run(
@@ -55,6 +94,9 @@ module.exports = {
                     [currentHealth, userData.active_character_id]
                 );
             }
+
+            // Store original health percentage for form transitions
+            const healthPercentage = (currentHealth / (userData.base_pl * userData.endurance)) * 100;
 
             if (modifierStr) {
                 // Modifying health - check if it's a percentage
@@ -82,33 +124,53 @@ module.exports = {
                 );
 
                 currentHealth = newHealth;
+
+                // Update ki maximum based on new health percentage
+                const newHealthPercentage = Math.max(0, (currentHealth / maxHealth) * 100);
+                const baseMaxKi = userData.endurance; // Base ki is always endurance
+                
+                // Ki maximum is limited by health percentage
+                const healthLimitedMaxKi = Math.floor((newHealthPercentage / 100) * baseMaxKi);
+                
+                // Don't increase current ki, only limit maximum
+                const currentKi = userData.current_ki || baseMaxKi;
+                const adjustedKi = Math.min(currentKi, healthLimitedMaxKi);
+                
+                await database.run(
+                    'UPDATE characters SET current_ki = ? WHERE id = ?',
+                    [adjustedKi, userData.active_character_id]
+                );
             }
 
-            // Calculate health percentage
-            const healthPercentage = Math.max(0, (currentHealth / maxHealth) * 100);
-            const clampedPercentage = Math.max(0, Math.min(120, healthPercentage));
+            // Calculate current health percentage
+            const currentHealthPercentage = Math.max(0, (currentHealth / maxHealth) * 100);
+            const clampedPercentage = Math.max(0, Math.min(120, currentHealthPercentage));
 
-            // Generate health bar
-            const healthBar = generateHealthBar(clampedPercentage);
+            // Generate health bar with custom emoji
+            const healthBar = generateHealthBar(clampedPercentage, '1400942686495572041');
 
-            // Create embed
+            // Create embed with cleaner layout
             const embed = new EmbedBuilder()
-                .setColor(currentHealth > 0 ? (healthPercentage >= 50 ? 0x2ecc71 : 0xf39c12) : 0xe74c3c)
+                .setColor(currentHealth > 0 ? (currentHealthPercentage >= 50 ? 0x2ecc71 : 0xf39c12) : 0xe74c3c)
                 .setTitle(`${userData.name}'s Health`)
-                .setDescription(`${healthBar}\n\n**${Math.round(clampedPercentage)}%**\n${currentHealth}/${maxHealth}`)
-                .addFields(
-                    { name: 'Character', value: userData.name, inline: true },
-                    { name: 'Race', value: userData.race, inline: true },
-                    { name: 'Owner', value: `<@${targetUserId}>`, inline: true }
-                )
+                .setDescription(`${healthBar}\n\n${currentHealth}/${maxHealth} **${Math.round(clampedPercentage)}%**`)
                 .setTimestamp();
+
+            // Add form information if active
+            if (activeForm) {
+                embed.addFields({ 
+                    name: 'Active Form', 
+                    value: activeForm.name, 
+                    inline: true 
+                });
+            }
 
             // Add status indicators
             if (currentHealth > maxHealth) {
                 embed.addFields({ name: 'Status', value: '🔋 Overhealed', inline: false });
             } else if (currentHealth <= 0) {
                 embed.addFields({ name: 'Status', value: '💀 Critical', inline: false });
-            } else if (healthPercentage < 20) {
+            } else if (currentHealthPercentage < 20) {
                 embed.addFields({ name: 'Status', value: '⚠️ Low Health', inline: false });
             }
 
