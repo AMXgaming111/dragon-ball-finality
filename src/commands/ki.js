@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { parseModifier, applyModifier, calculateMaxKi, calculateHealthPercentage, generateKiBar } = require('../utils/calculations');
+const { parseModifier, applyModifier, calculateMaxKi, generateKiBar, calculateEffectivePL } = require('../utils/calculations');
 
 module.exports = {
     name: 'ki',
@@ -25,27 +25,82 @@ module.exports = {
                 modifierStr = args[0];
             }
         } else if (args.length === 2) {
-            // !ki @user +20
+            // Could be !ki @user +20 OR !ki + 20 (space separated modifier)
+            if (args[0].startsWith('<@')) {
+                // It's !ki @user +20
+                const userId = args[0].replace(/[<@!>]/g, '');
+                targetUser = await message.client.users.fetch(userId).catch(() => null);
+                if (!targetUser) {
+                    return message.reply('User not found!');
+                }
+                targetUserId = targetUser.id;
+                modifierStr = args[1];
+            } else {
+                // It's !ki + 20 (space separated modifier for own character)
+                modifierStr = args[0] + args[1]; // Combine "+ 20" into "+20"
+            }
+        } else if (args.length === 3) {
+            // !ki @user + 20 (space separated)
             const userId = args[0].replace(/[<@!>]/g, '');
             targetUser = await message.client.users.fetch(userId).catch(() => null);
             if (!targetUser) {
                 return message.reply('User not found!');
             }
             targetUserId = targetUser.id;
-            modifierStr = args[1];
+            modifierStr = args[1] + args[2]; // Combine "+ 20" into "+20"
         }
 
         try {
-            // Get user's active character
+            // Get user's active character with form data
             const userData = await database.getUserWithActiveCharacter(targetUserId);
             if (!userData || !userData.active_character_id) {
                 const pronoun = targetUserId === message.author.id ? 'You don\'t' : `${targetUser.username} doesn't`;
                 return message.reply(`${pronoun} have an active character.`);
             }
 
-            // Calculate max ki and health percentage
-            const maxKi = calculateMaxKi(userData.endurance);
-            const maxHealth = userData.base_pl * userData.endurance;
+            // Get active form data for ki calculations
+            const activeForm = await database.get(`
+                SELECT f.name, f.pl_modifier, f.endurance_modifier, cf.is_active
+                FROM character_forms cf
+                JOIN forms f ON cf.form_key = f.form_key
+                WHERE cf.character_id = ? AND cf.is_active = 1
+                LIMIT 1
+            `, [userData.active_character_id]);
+
+            let formMultiplier = 1;
+            let enduranceModifier = 0;
+            let basePLModifier = 1;
+
+            if (activeForm) {
+                // Parse the old-style form modifiers
+                if (activeForm.pl_modifier) {
+                    // Parse modifier like "*5" or "+100"
+                    const plMod = activeForm.pl_modifier;
+                    if (plMod.startsWith('*')) {
+                        basePLModifier = parseFloat(plMod.substring(1)) || 1;
+                    } else if (plMod.startsWith('+')) {
+                        basePLModifier = 1 + (parseFloat(plMod.substring(1)) || 0);
+                    }
+                }
+                if (activeForm.endurance_modifier) {
+                    // Parse modifier like "+40" or "-10"
+                    const endMod = activeForm.endurance_modifier;
+                    if (endMod.startsWith('+')) {
+                        enduranceModifier = parseFloat(endMod.substring(1)) || 0;
+                    } else if (endMod.startsWith('-')) {
+                        enduranceModifier = -(parseFloat(endMod.substring(1)) || 0);
+                    }
+                }
+            }
+
+            // Calculate modified stats
+            const modifiedBasePL = userData.base_pl * basePLModifier;
+            const modifiedEndurance = userData.endurance + enduranceModifier;
+            
+            // Calculate max health and ki with form modifications
+            const maxHealth = Math.floor(modifiedBasePL * modifiedEndurance);
+            const maxKi = modifiedEndurance; // Ki max is always endurance (with form mods)
+            
             let currentHealth = userData.current_health;
             let currentKi = userData.current_ki;
 
@@ -67,7 +122,7 @@ module.exports = {
             }
 
             // Calculate health percentage to determine ki cap
-            const healthPercentage = calculateHealthPercentage(currentHealth, maxHealth);
+            const healthPercentage = Math.max(0, (currentHealth / maxHealth) * 100);
             const kiCap = Math.floor(maxKi * (healthPercentage / 100));
 
             if (modifierStr) {
@@ -81,18 +136,16 @@ module.exports = {
                 }
 
                 if (isPercentage) {
-                    // Convert percentage to actual ki value based on current cap
-                    const percentValue = (modifier.value / 100) * kiCap;
+                    // Convert percentage to actual ki value based on max ki
+                    const percentValue = (modifier.value / 100) * maxKi;
                     modifier.value = percentValue;
                 }
 
                 // Apply the modifier
                 let newKi = Math.floor(applyModifier(currentKi, modifier));
                 
-                // Cap ki at the health-based maximum unless setting above
-                if (modifier.type !== 'set' || newKi <= kiCap) {
-                    newKi = Math.min(newKi, kiCap);
-                }
+                // Ki can go above cap or below 0, just like health
+                // No capping unless specifically requested in the future
 
                 // Update database
                 await database.run(
@@ -103,37 +156,45 @@ module.exports = {
                 currentKi = newKi;
             }
 
-            // Calculate ki percentage
+            // Calculate ki percentage based on actual max ki (not capped)
             const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
             const clampedPercentage = Math.max(0, Math.min(120, kiPercentage));
 
-            // Generate ki bar with custom emoji
-            const kiBar = generateKiBar(clampedPercentage);
+            // Generate ki bar with custom emoji (using correct IDs)
+            const kiBar = generateKiBar(clampedPercentage, '1400943268170301561');
 
-            // Create embed
+            // Create embed with cleaner layout (similar to health)
             const embed = new EmbedBuilder()
                 .setColor(currentKi > 0 ? (kiPercentage >= 50 ? 0x3498db : 0xf39c12) : 0x95a5a6)
                 .setTitle(`${userData.name}'s Ki`)
-                .setDescription(`${kiBar}\n\n**${Math.round(clampedPercentage)}%**\n${currentKi}/${maxKi}`)
-                .addFields(
-                    { name: 'Character', value: userData.name, inline: true },
-                    { name: 'Current Cap', value: `${kiCap}/${maxKi}`, inline: true },
-                    { name: 'Health %', value: `${Math.round(healthPercentage)}%`, inline: true }
-                )
+                .setDescription(`${kiBar}\n${currentKi}/${maxKi} (${Math.round(clampedPercentage)}%)`)
                 .setTimestamp();
+
+            // Add form information if active
+            if (activeForm) {
+                embed.addFields({ 
+                    name: 'Active Form', 
+                    value: activeForm.name, 
+                    inline: true 
+                });
+            }
 
             // Add status indicators
             if (currentKi > kiCap) {
-                embed.addFields({ name: 'Status', value: '⚡ Above Cap', inline: false });
+                embed.addFields({ name: 'Status', value: '⚡ Above Health Cap', inline: false });
             } else if (currentKi <= 0) {
                 embed.addFields({ name: 'Status', value: '😵 Exhausted', inline: false });
             } else if (kiPercentage < 20) {
                 embed.addFields({ name: 'Status', value: '⚠️ Low Ki', inline: false });
             }
 
-            // Add explanation about ki cap
+            // Add health cap info if relevant
             if (healthPercentage < 100) {
-                embed.setFooter({ text: 'Ki cap is reduced based on health percentage' });
+                embed.addFields({ 
+                    name: 'Health Cap', 
+                    value: `${kiCap}/${maxKi} (${Math.round(healthPercentage)}%)`, 
+                    inline: true 
+                });
             }
 
             await message.reply({ embeds: [embed] });

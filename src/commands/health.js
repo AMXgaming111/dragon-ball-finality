@@ -25,14 +25,29 @@ module.exports = {
                 modifierStr = args[0];
             }
         } else if (args.length === 2) {
-            // !health @user +20
+            // Could be !health @user +20 OR !health + 20 (space separated modifier)
+            if (args[0].startsWith('<@')) {
+                // It's !health @user +20
+                const userId = args[0].replace(/[<@!>]/g, '');
+                targetUser = await message.client.users.fetch(userId).catch(() => null);
+                if (!targetUser) {
+                    return message.reply('User not found!');
+                }
+                targetUserId = targetUser.id;
+                modifierStr = args[1];
+            } else {
+                // It's !health + 20 (space separated modifier for own character)
+                modifierStr = args[0] + args[1]; // Combine "+ 20" into "+20"
+            }
+        } else if (args.length === 3) {
+            // !health @user + 20 (space separated)
             const userId = args[0].replace(/[<@!>]/g, '');
             targetUser = await message.client.users.fetch(userId).catch(() => null);
             if (!targetUser) {
                 return message.reply('User not found!');
             }
             targetUserId = targetUser.id;
-            modifierStr = args[1];
+            modifierStr = args[1] + args[2]; // Combine "+ 20" into "+20"
         }
 
         try {
@@ -125,16 +140,18 @@ module.exports = {
 
                 currentHealth = newHealth;
 
-                // Update ki maximum based on new health percentage
-                const newHealthPercentage = Math.max(0, (currentHealth / maxHealth) * 100);
-                const baseMaxKi = userData.endurance; // Base ki is always endurance
-                
-                // Ki maximum is limited by health percentage
-                const healthLimitedMaxKi = Math.floor((newHealthPercentage / 100) * baseMaxKi);
+                // Update ki maximum based on new health percentage with Human Spirit consideration
+                const { calculateKiCap } = require('../utils/calculations');
+                const newKiCap = await calculateKiCap(database, {
+                    id: userData.active_character_id,
+                    base_pl: userData.base_pl,
+                    endurance: userData.endurance,
+                    current_health: currentHealth
+                });
                 
                 // Don't increase current ki, only limit maximum
-                const currentKi = userData.current_ki || baseMaxKi;
-                const adjustedKi = Math.min(currentKi, healthLimitedMaxKi);
+                const currentKi = userData.current_ki || userData.endurance;
+                const adjustedKi = Math.min(currentKi, newKiCap);
                 
                 await database.run(
                     'UPDATE characters SET current_ki = ? WHERE id = ?',
@@ -153,7 +170,7 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setColor(currentHealth > 0 ? (currentHealthPercentage >= 50 ? 0x2ecc71 : 0xf39c12) : 0xe74c3c)
                 .setTitle(`${userData.name}'s Health`)
-                .setDescription(`${healthBar}\n\n${currentHealth}/${maxHealth} **${Math.round(clampedPercentage)}%**`)
+                .setDescription(`${healthBar}\n${currentHealth}/${maxHealth} (${Math.round(clampedPercentage)}%)`)
                 .setTimestamp();
 
             // Add form information if active

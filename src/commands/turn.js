@@ -66,7 +66,9 @@ async function createTurnOrder(message, userMentions, database) {
     for (const mention of userMentions) {
         const userId = mention.replace(/[<@!>]/g, '');
         const user = await message.client.users.fetch(userId).catch(() => null);
-        if (!user) continue;
+        if (!user) {
+            return message.reply(`Could not find user ${mention}. Make sure they are in the server.`);
+        }
 
         const userData = await database.getUserWithActiveCharacter(userId);
         if (!userData || !userData.active_character_id) {
@@ -75,7 +77,7 @@ async function createTurnOrder(message, userMentions, database) {
 
         participants.push({
             userId: userId,
-            username: user.username,
+            username: user.username || 'Unknown User',
             characterName: userData.name,
             characterId: userData.active_character_id
         });
@@ -254,12 +256,23 @@ async function advanceTurn(message, database) {
 
     const nextParticipant = participants[currentTurn];
     
+    // Refresh username for display
+    let displayUsername = nextParticipant.username || 'Unknown User';
+    try {
+        const user = await message.client.users.fetch(nextParticipant.userId).catch(() => null);
+        if (user) {
+            displayUsername = user.username;
+        }
+    } catch (error) {
+        // Keep the fallback username
+    }
+    
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
         .setTitle('🔄 Turn Advanced')
         .setDescription(`It's now **${nextParticipant.characterName}**'s turn!`)
         .addFields(
-            { name: 'Current Player', value: `${nextParticipant.characterName} (${nextParticipant.username})`, inline: true },
+            { name: 'Current Player', value: `${nextParticipant.characterName} (${displayUsername})`, inline: true },
             { name: 'Round', value: currentRound.toString(), inline: true }
         );
 
@@ -283,9 +296,25 @@ async function showTurnOrder(message, database) {
     const currentTurn = turnOrder.current_turn;
     const currentRound = turnOrder.current_round;
 
+    // Refresh usernames in case they've changed or become unavailable
+    for (let i = 0; i < participants.length; i++) {
+        const participant = participants[i];
+        try {
+            const user = await message.client.users.fetch(participant.userId).catch(() => null);
+            if (user) {
+                participant.username = user.username;
+            } else {
+                participant.username = 'Unknown User';
+            }
+        } catch (error) {
+            participant.username = 'Unknown User';
+        }
+    }
+
     const orderText = participants.map((p, i) => {
         const indicator = i === currentTurn ? '👉' : '   ';
-        return `${indicator} ${i + 1}. ${p.characterName} (${p.username})`;
+        const username = p.username || 'Unknown User';
+        return `${indicator} ${i + 1}. ${p.characterName} (${username})`;
     }).join('\n');
 
     const embed = new EmbedBuilder()
@@ -373,11 +402,14 @@ async function applyEndOfTurnEffects(characterId, database) {
     // Get character with racials and forms
     const character = await database.get(`
         SELECT c.*, 
-               GROUP_CONCAT(cr.racial_name) as racials,
-               cf.form_name, cf.form_data
+               GROUP_CONCAT(cr.racial_tag) as racials,
+               f.name as form_name, 
+               f.ki_drain, f.health_drain, f.strength_modifier, f.defense_modifier, 
+               f.agility_modifier, f.endurance_modifier, f.control_modifier, f.pl_modifier
         FROM characters c
         LEFT JOIN character_racials cr ON c.id = cr.character_id
         LEFT JOIN character_forms cf ON c.id = cf.character_id AND cf.is_active = 1
+        LEFT JOIN forms f ON cf.form_key = f.form_key
         WHERE c.id = ?
         GROUP BY c.id
     `, [characterId]);
@@ -390,27 +422,71 @@ async function applyEndOfTurnEffects(characterId, database) {
 
     // Apply racial effects
     if (racials.includes('mregen')) {
-        // Majin Regeneration - 10% health unless at 100%
+        // Majin Regeneration
+        const hasEnhancedRegen = await database.get(`
+            SELECT * FROM character_racials 
+            WHERE character_id = ? AND racial_tag = 'mregen_enhanced' AND is_active = 1
+        `, [characterId]);
+        
         const maxHealth = character.base_pl * character.endurance;
         const currentHealth = character.current_health || maxHealth;
         
         if (currentHealth < maxHealth) {
-            healthChange += Math.floor(maxHealth * 0.1);
+            if (hasEnhancedRegen) {
+                // Enhanced regeneration - 20% health
+                healthChange += Math.floor(maxHealth * 0.2);
+                
+                // Apply ki cost for enhanced regeneration
+                const { calculateKiCost } = require('../utils/calculations');
+                const kiCost = calculateKiCost(3, character.control);
+                kiChange -= kiCost;
+            } else {
+                // Basic regeneration - 10% health
+                healthChange += Math.floor(maxHealth * 0.1);
+            }
         }
     }
 
-    // Apply form drains/gains
-    if (character.form_data) {
-        const formData = JSON.parse(character.form_data);
+    // Zenkai - handled in combat state updates when dealing damage
+    if (racials.includes('zenkai')) {
+        // Zenkai effect is applied when attacking/dealing damage, not on turn advancement
+        // The bonus is stored in combat_state table and applied to PL calculations
+    }
+
+    // Giant Form handling for Namekians
+    if (racials.includes('ngiant')) {
+        const giantForm = await database.get(`
+            SELECT * FROM character_racials 
+            WHERE character_id = ? AND racial_tag = 'ngiant' AND is_active = 1
+        `, [characterId]);
         
-        if (formData.ki_drain) {
-            const baseDrain = formData.ki_drain;
-            const actualDrain = Math.max(1, baseDrain * (100 / character.control));
-            kiChange -= actualDrain;
+        if (giantForm) {
+            // Giant form ki drain: 3 * (100 / Control) per turn
+            const { calculateKiCost } = require('../utils/calculations');
+            const kiCost = calculateKiCost(3, character.control);
+            kiChange -= kiCost;
+        }
+    }
+
+    // Human Spirit and Arcosian Resilience are passive and applied in calculations
+    // Majin's Magic is handled when dealing damage in combat
+
+    // Apply form drains/gains
+    if (character.form_name) {
+        // Form is active, apply drains
+        if (character.ki_drain) {
+            const baseDrain = parseInt(character.ki_drain) || 0;
+            if (baseDrain > 0) {
+                const actualDrain = Math.max(1, baseDrain * (100 / character.control));
+                kiChange -= actualDrain;
+            }
         }
         
-        if (formData.health_drain) {
-            healthChange -= formData.health_drain;
+        if (character.health_drain) {
+            const healthDrain = parseInt(character.health_drain) || 0;
+            if (healthDrain > 0) {
+                healthChange -= healthDrain;
+            }
         }
     }
 

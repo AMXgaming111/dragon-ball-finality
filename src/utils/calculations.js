@@ -1,5 +1,35 @@
 const { racials } = require('./config');
 
+// Check if character has active Human Spirit racial
+async function hasHumanSpirit(database, characterId) {
+    const racial = await database.get(`
+        SELECT is_active FROM character_racials 
+        WHERE character_id = ? AND racial_tag = 'hspirit' AND is_active = 1
+    `, [characterId]);
+    return racial !== null;
+}
+
+// Calculate ki cap based on health with Human Spirit consideration
+async function calculateKiCap(database, character) {
+    const maxHealth = character.base_pl * character.endurance;
+    const currentHealth = character.current_health || maxHealth;
+    const healthPercentage = (currentHealth / maxHealth) * 100;
+    
+    if (healthPercentage >= 100) {
+        return character.endurance;
+    }
+    
+    // Calculate base ki reduction
+    const baseReduction = (100 - healthPercentage) / 100;
+    
+    // Check for Human Spirit racial (halves ki cap reduction)
+    const humanSpirit = await hasHumanSpirit(database, character.id);
+    const actualReduction = humanSpirit ? baseReduction * 0.5 : baseReduction;
+    
+    const reducedCap = Math.floor(character.endurance * (1 - actualReduction));
+    return Math.max(1, reducedCap); // Minimum 1 ki cap
+}
+
 // Calculate ki loss based on health percentage
 function calculateKiLossFromHealth(healthPercentage) {
     if (healthPercentage >= 100) return 0;
@@ -66,6 +96,25 @@ function calculateHealthPercentage(currentHealth, maxHealth) {
 function calculateKiCost(baseCost, control) {
     const cost = Math.floor(baseCost * (100 / control));
     return Math.max(1, cost); // Minimum cost of 1
+}
+
+// Calculate ki special cost based on multiplier intervals
+function calculateKiSpecialCost(multiplier, control) {
+    // Validate multiplier is at least 1.5 and in 0.5 intervals
+    if (multiplier < 1.5) return 0;
+    
+    // Calculate how many 0.5 intervals above 1.0
+    const intervals = Math.floor((multiplier - 1.0) / 0.5);
+    if (intervals <= 0) return 0;
+    
+    // Each interval costs 5 base ki, affected by control with minimum 1 per interval
+    let totalCost = 0;
+    for (let i = 0; i < intervals; i++) {
+        const intervalCost = Math.max(1, Math.floor(5 * (100 / control)));
+        totalCost += intervalCost;
+    }
+    
+    return totalCost;
 }
 
 // Calculate physical attack damage
@@ -224,38 +273,50 @@ function calculateKiDefense(effectivePL, defense, multiplier = 1) {
 function generateHealthBar(healthPercentage, emojiId = '1400942686495572041') {
     const clampedPercentage = Math.max(0, Math.min(120, healthPercentage));
     
+    // Calculate units based on exact percentage ranges from specifications
     let units = 0;
-    if (clampedPercentage >= 100) units = 5;
-    else if (clampedPercentage >= 80) units = 4;
-    else if (clampedPercentage >= 50) units = 3;
-    else if (clampedPercentage >= 20) units = 2;
-    else if (clampedPercentage >= 1) units = 1;
-    else units = 0;
+    if (clampedPercentage >= 100) units = 10;      // 100%+ shows all 10 units
+    else if (clampedPercentage >= 90) units = 9;   // 99-90% shows 9 units
+    else if (clampedPercentage >= 80) units = 8;   // 89-80% shows 8 units
+    else if (clampedPercentage >= 60) units = 7;   // 79-60% shows 7 units (as specified)
+    else if (clampedPercentage >= 50) units = 6;   // 59-50% shows 6 units
+    else if (clampedPercentage >= 40) units = 5;   // 49-40% shows 5 units
+    else if (clampedPercentage >= 30) units = 4;   // 39-30% shows 4 units
+    else if (clampedPercentage >= 20) units = 3;   // 29-20% shows 3 units
+    else if (clampedPercentage >= 10) units = 2;   // 19-10% shows 2 units
+    else if (clampedPercentage >= 1) units = 1;    // 9-1% shows 1 unit
+    else units = 0;                                // 0% and below shows 0 units
     
     // Use custom emoji format for Discord
     const healthEmoji = `<:health:${emojiId}>`;
-    const emptyEmoji = '▫️'; // Empty health unit
+    const emptyEmoji = '<:empty_health:1402157239220830290>'; // Empty health unit
     
-    return healthEmoji.repeat(units) + emptyEmoji.repeat(5 - units);
+    return healthEmoji.repeat(units) + emptyEmoji.repeat(10 - units);
 }
 
 // Generate ki bar visualization
 function generateKiBar(kiPercentage, emojiId = '1400943268170301561') {
     const clampedPercentage = Math.max(0, Math.min(120, kiPercentage));
     
+    // Calculate units based on exact percentage ranges (same as health bar)
     let units = 0;
-    if (clampedPercentage >= 100) units = 5;
-    else if (clampedPercentage >= 80) units = 4;
-    else if (clampedPercentage >= 50) units = 3;
-    else if (clampedPercentage >= 20) units = 2;
-    else if (clampedPercentage >= 1) units = 1;
-    else units = 0;
+    if (clampedPercentage >= 100) units = 10;      // 100%+ shows all 10 units
+    else if (clampedPercentage >= 90) units = 9;   // 99-90% shows 9 units
+    else if (clampedPercentage >= 80) units = 8;   // 89-80% shows 8 units
+    else if (clampedPercentage >= 60) units = 7;   // 79-60% shows 7 units
+    else if (clampedPercentage >= 50) units = 6;   // 59-50% shows 6 units
+    else if (clampedPercentage >= 40) units = 5;   // 49-40% shows 5 units
+    else if (clampedPercentage >= 30) units = 4;   // 39-30% shows 4 units
+    else if (clampedPercentage >= 20) units = 3;   // 29-20% shows 3 units
+    else if (clampedPercentage >= 10) units = 2;   // 19-10% shows 2 units
+    else if (clampedPercentage >= 1) units = 1;    // 9-1% shows 1 unit
+    else units = 0;                                // 0% and below shows 0 units
     
     // Use custom emoji format for Discord
     const kiEmoji = `<:ki:${emojiId}>`;
-    const emptyEmoji = '▫️'; // Empty ki unit
+    const emptyEmoji = '<:empty_ki:1402164874154479636>'; // Empty ki unit
     
-    return kiEmoji.repeat(units) + emptyEmoji.repeat(5 - units);
+    return kiEmoji.repeat(units) + emptyEmoji.repeat(10 - units);
 }
 
 module.exports = {
@@ -265,6 +326,7 @@ module.exports = {
     calculateMaxKi,
     calculateHealthPercentage,
     calculateKiCost,
+    calculateKiSpecialCost,
     calculatePhysicalAttack,
     calculateKiAttack,
     calculateAccuracy,
@@ -280,5 +342,7 @@ module.exports = {
     applyModifier,
     hasStaffRole,
     generateHealthBar,
-    generateKiBar
+    generateKiBar,
+    hasHumanSpirit,
+    calculateKiCap
 };

@@ -6,9 +6,10 @@ const {
     calculateAccuracy,
     rollWithEffort,
     getEffortKiCost,
-    calculateKiCost,
+    calculateKiSpecialCost,
     calculateBlowback
 } = require('../utils/calculations');
+const { storePendingAttack, cleanupExpiredAttacks } = require('../utils/combat');
 
 module.exports = {
     name: 'attack',
@@ -53,6 +54,9 @@ module.exports = {
         }
 
         try {
+            // Clean up expired attacks
+            await cleanupExpiredAttacks(database);
+            
             // Get attacker's character
             const attackerData = await database.getUserWithActiveCharacter(message.author.id);
             if (!attackerData || !attackerData.active_character_id) {
@@ -65,9 +69,50 @@ module.exports = {
                 return message.reply(`${targetUser.username} doesn't have an active character.`);
             }
 
+            // Auto-create turn order if it doesn't exist
+            const existingTurnOrder = await database.get(
+                'SELECT * FROM turn_orders WHERE channel_id = ?',
+                [message.channel.id]
+            );
+            
+            if (!existingTurnOrder) {
+                // Create turn order with attacker first, defender second
+                const participants = [
+                    {
+                        userId: message.author.id,
+                        characterId: attackerData.active_character_id,
+                        characterName: attackerData.name
+                    },
+                    {
+                        userId: targetUserId,
+                        characterId: targetData.active_character_id,
+                        characterName: targetData.name
+                    }
+                ];
+                
+                await database.run(
+                    'INSERT INTO turn_orders (channel_id, participants, current_turn, current_round) VALUES (?, ?, ?, ?)',
+                    [message.channel.id, JSON.stringify(participants), 0, 1]
+                );
+                
+                await message.channel.send(`⚔️ **Combat initiated!** Turn order created with **${attackerData.name}** first, **${targetData.name}** second.`);
+            }
+
             // Calculate attacker's effective PL and stats
             const attackerKiPercentage = attackerData.current_ki ? (attackerData.current_ki / attackerData.endurance) * 100 : 100;
-            const attackerEffectivePL = calculateEffectivePL(attackerData.base_pl, attackerKiPercentage);
+            
+            // Check for Arcosian Resilience racial
+            const hasArcosianResilience = await database.get(`
+                SELECT is_active FROM character_racials 
+                WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
+            `, [attackerData.active_character_id]);
+            
+            const attackerEffectivePL = calculateEffectivePL(
+                attackerData.base_pl, 
+                attackerKiPercentage, 
+                1, 
+                hasArcosianResilience !== null
+            );
 
             // Create attack type selection embed
             const embed = new EmbedBuilder()
@@ -188,19 +233,39 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     const damage = rollWithEffort(baseDamage, effort);
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
 
-    // Apply effort ki cost/gain
+    // Apply ki costs and gains
     const effortKiCost = getEffortKiCost(effort);
     let kiChange = 0;
 
     if (additive === 0 && accuracyMultiplier === 1) {
-        // Basic attack - gain 5% ki
+        // Basic attack - gain 5% ki (but still apply effort cost if any)
         kiChange = Math.floor(attackerData.endurance * 0.05);
-    } else {
-        // Modified attack - apply effort cost
         if (effortKiCost > 0) {
-            kiChange = -Math.floor(attackerData.endurance * (effortKiCost / 100));
+            kiChange -= Math.floor(attackerData.endurance * (effortKiCost / 100));
         } else if (effortKiCost < 0) {
-            kiChange = Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100));
+            kiChange += Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100));
+        }
+    } else {
+        // Modified attack - calculate ki costs
+        
+        // Apply accuracy multiplier ki cost if used
+        if (accuracyMultiplier > 1) {
+            const accuracyKiCost = calculateKiSpecialCost(accuracyMultiplier, attackerData.control);
+            kiChange -= accuracyKiCost;
+        }
+        
+        // Apply effort ki cost/gain
+        if (effortKiCost > 0) {
+            kiChange -= Math.floor(attackerData.endurance * (effortKiCost / 100));
+        } else if (effortKiCost < 0) {
+            kiChange += Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100));
+        }
+        
+        // Check if attacker has enough ki for the costs
+        const currentKi = attackerData.current_ki || attackerData.endurance;
+        const totalKiCost = Math.abs(Math.min(0, kiChange)); // Get the total cost (negative changes)
+        if (totalKiCost > currentKi) {
+            return interaction.followUp(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
         }
     }
 
@@ -213,14 +278,17 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         );
     }
 
+    // Get attacker's username for mention
+    const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
+
     // Create result embed
     const resultEmbed = new EmbedBuilder()
         .setColor(0xe74c3c)
-        .setTitle('💥 Physical Attack Result')
-        .setDescription(`**${attackerData.name}** has attacked **${targetData.name}** for **${damage}** damage!`)
+        .setTitle('💥 Physical Attack Launched')
+        .setDescription(`**${attackerData.name}** has launched a physical attack against **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*`)
         .addFields(
+            { name: 'Attack Damage', value: damage.toString(), inline: true },
             { name: 'Accuracy', value: accuracy.toString(), inline: true },
-            { name: 'Damage', value: damage.toString(), inline: true },
             { name: 'Attack Type', value: additive === 0 ? 'Basic' : 'Enhanced', inline: true }
         );
 
@@ -231,6 +299,29 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
             inline: true 
         });
     }
+
+    // Store the pending attack
+    const attackData = {
+        additive: additive,
+        effort: effort,
+        accuracyMultiplier: accuracyMultiplier,
+        isBasic: additive === 0 && accuracyMultiplier === 1
+    };
+    
+    await storePendingAttack(
+        database,
+        interaction.channel.id,
+        interaction.user.id,
+        targetData.owner_id,
+        attackerData.active_character_id,
+        targetData.active_character_id,
+        'physical',
+        damage,
+        accuracy,
+        attackData
+    );
+
+    resultEmbed.setFooter({ text: 'Attack pending - target must defend within 5 minutes or take full damage!' });
 
     await interaction.followUp({ embeds: [resultEmbed] });
     
@@ -246,7 +337,7 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     const embed = new EmbedBuilder()
         .setColor(0x3498db)
         .setTitle('⚡ Ki Attack')
-        .setDescription('Please type your multiplier (minimum 1.1):');
+        .setDescription('Please type your multiplier (minimum 1.5, intervals of 0.5):\nExamples: 1.5, 2.0, 2.5, 3.0, etc.');
 
     await interaction.update({ embeds: [embed], components: [] });
 
@@ -265,19 +356,20 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     const multiplierInput = collected.first().content;
     const multiplier = parseFloat(multiplierInput);
 
-    if (isNaN(multiplier) || multiplier < 1.1) {
-        return interaction.followUp('Multiplier must be at least 1.1!');
+    // Validate multiplier
+    if (isNaN(multiplier) || multiplier < 1.5) {
+        return interaction.followUp('Multiplier must be at least 1.5!');
     }
 
-    // Calculate ki cost
-    const baseCost = Math.floor((multiplier - 1) * 10); // 1 ki per 0.1 multiplier
-    const kiCost = calculateKiCost(baseCost, attackerData.control);
-    
-    // Check if attacker has enough ki
-    const currentKi = attackerData.current_ki || attackerData.endurance;
-    if (currentKi < kiCost) {
-        return interaction.followUp(`Not enough ki! Need ${kiCost}, have ${currentKi}.`);
+    // Check if multiplier is in valid 0.5 intervals
+    const remainder = (multiplier - 1.0) % 0.5;
+    if (Math.abs(remainder) > 0.001) { // Small tolerance for floating point precision
+        return interaction.followUp('Multiplier must be in 0.5 intervals! (e.g., 1.5, 2.0, 2.5, 3.0, etc.)');
     }
+
+    // Calculate ki cost using new system
+    const kiCost = calculateKiSpecialCost(multiplier, attackerData.control);
+    const currentKi = attackerData.current_ki || attackerData.endurance;
 
     // Calculate damage and accuracy
     const baseDamage = calculateKiAttack(attackerEffectivePL, multiplier);
@@ -287,11 +379,24 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     const damage = rollWithEffort(baseDamage, effort);
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
 
-    // Calculate total ki cost with effort
+    // Calculate total ki cost with effort and accuracy multiplier
     const effortKiCost = getEffortKiCost(effort);
     let totalKiCost = kiCost;
+    
+    // Add accuracy multiplier ki cost if used
+    if (accuracyMultiplier > 1) {
+        const accuracyKiCost = calculateKiSpecialCost(accuracyMultiplier, attackerData.control);
+        totalKiCost += accuracyKiCost;
+    }
+    
+    // Add effort ki cost
     if (effortKiCost > 0) {
         totalKiCost += Math.floor(attackerData.endurance * (effortKiCost / 100));
+    }
+    
+    // Check if attacker has enough ki for all costs
+    if (totalKiCost > currentKi) {
+        return interaction.followUp(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
     }
 
     // Calculate blowback damage
@@ -314,16 +419,37 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
             'UPDATE characters SET current_health = ? WHERE id = ?',
             [newHealth, attackerData.active_character_id]
         );
+        
+        // Update ki cap based on new health percentage with Human Spirit consideration
+        const { calculateKiCap } = require('../utils/calculations');
+        const newKiCap = await calculateKiCap(database, {
+            id: attackerData.active_character_id,
+            base_pl: attackerData.base_pl,
+            endurance: attackerData.endurance,
+            current_health: newHealth
+        });
+        
+        // Don't increase current ki, only limit maximum
+        const attackerCurrentKi = newKi; // Use the updated ki from earlier
+        const adjustedKi = Math.min(attackerCurrentKi, newKiCap);
+        
+        await database.run(
+            'UPDATE characters SET current_ki = ? WHERE id = ?',
+            [adjustedKi, attackerData.active_character_id]
+        );
     }
+
+    // Get attacker's username for mention
+    const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
     // Create result embed
     const resultEmbed = new EmbedBuilder()
         .setColor(0x3498db)
-        .setTitle('⚡ Ki Attack Result')
-        .setDescription(`**${attackerData.name}** has attacked **${targetData.name}** for **${damage}** damage!`)
+        .setTitle('⚡ Ki Attack Launched')
+        .setDescription(`**${attackerData.name}** has launched a ki attack against **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*`)
         .addFields(
+            { name: 'Attack Damage', value: damage.toString(), inline: true },
             { name: 'Accuracy', value: accuracy.toString(), inline: true },
-            { name: 'Damage', value: damage.toString(), inline: true },
             { name: 'Multiplier', value: `${multiplier}x`, inline: true },
             { name: 'Ki Cost', value: totalKiCost.toString(), inline: true }
         );
@@ -335,6 +461,30 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
             inline: true 
         });
     }
+
+    // Store the pending attack
+    const attackData = {
+        multiplier: multiplier,
+        effort: effort,
+        accuracyMultiplier: accuracyMultiplier,
+        totalKiCost: totalKiCost,
+        blowbackDamage: blowbackDamage
+    };
+    
+    await storePendingAttack(
+        database,
+        interaction.channel.id,
+        interaction.user.id,
+        targetData.owner_id,
+        attackerData.active_character_id,
+        targetData.active_character_id,
+        'ki',
+        damage,
+        accuracy,
+        attackData
+    );
+
+    resultEmbed.setFooter({ text: 'Attack pending - target must defend within 5 minutes or take full damage!' });
 
     await interaction.followUp({ embeds: [resultEmbed] });
     

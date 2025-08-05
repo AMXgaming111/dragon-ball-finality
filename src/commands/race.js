@@ -23,8 +23,8 @@ module.exports = {
 
             // Get character's passive racials
             const passiveRacials = await database.all(`
-                SELECT racial_name FROM character_racials 
-                WHERE character_id = ? AND racial_name IN ('zenkai', 'mregen', 'mmagic', 'aresist', 'hspirit')
+                SELECT racial_tag FROM character_racials 
+                WHERE character_id = ? AND racial_tag IN ('zenkai', 'mregen', 'mmagic', 'aresist', 'hspirit')
             `, [userData.active_character_id]);
 
             if (passiveRacials.length === 0) {
@@ -36,8 +36,8 @@ module.exports = {
             // Update racial states
             for (const racial of passiveRacials) {
                 await database.run(
-                    'UPDATE character_racials SET is_active = ? WHERE character_id = ? AND racial_name = ?',
-                    [isActive ? 1 : 0, userData.active_character_id, racial.racial_name]
+                    'UPDATE character_racials SET is_active = ? WHERE character_id = ? AND racial_tag = ?',
+                    [isActive ? 1 : 0, userData.active_character_id, racial.racial_tag]
                 );
             }
 
@@ -49,7 +49,7 @@ module.exports = {
                 'hspirit': 'Human Spirit'
             };
 
-            const racialList = passiveRacials.map(r => racialNames[r.racial_name] || r.racial_name).join(', ');
+            const racialList = passiveRacials.map(r => racialNames[r.racial_tag] || r.racial_tag).join(', ');
 
             const embed = new EmbedBuilder()
                 .setColor(isActive ? 0x2ecc71 : 0xe74c3c)

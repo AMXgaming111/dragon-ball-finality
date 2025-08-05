@@ -6,8 +6,10 @@ const {
     calculateAccuracy,
     rollWithEffort,
     getEffortKiCost,
-    calculateKiCost
+    calculateKiCost,
+    calculateKiSpecialCost
 } = require('../utils/calculations');
+const { getPendingAttack, resolveCombat, createCombatResultEmbed, cleanupExpiredAttacks } = require('../utils/combat');
 
 module.exports = {
     name: 'defend',
@@ -41,6 +43,9 @@ module.exports = {
         }
 
         try {
+            // Clean up expired attacks
+            await cleanupExpiredAttacks(database);
+            
             // Get defender's character
             const defenderData = await database.getUserWithActiveCharacter(message.author.id);
             if (!defenderData || !defenderData.active_character_id) {
@@ -53,9 +58,27 @@ module.exports = {
                 return message.reply(`${attackerUser.username} doesn't have an active character.`);
             }
 
+            // Check for pending attack
+            const pendingAttack = await getPendingAttack(database, message.channel.id, attackerUserId, message.author.id);
+            if (!pendingAttack) {
+                return message.reply(`No pending attack found from ${attackerUser.username}. They need to attack you first!`);
+            }
+
             // Calculate defender's effective PL
             const defenderKiPercentage = defenderData.current_ki ? (defenderData.current_ki / defenderData.endurance) * 100 : 100;
-            const defenderEffectivePL = calculateEffectivePL(defenderData.base_pl, defenderKiPercentage);
+            
+            // Check for Arcosian Resilience racial
+            const hasArcosianResilience = await database.get(`
+                SELECT is_active FROM character_racials 
+                WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
+            `, [defenderData.active_character_id]);
+            
+            const defenderEffectivePL = calculateEffectivePL(
+                defenderData.base_pl, 
+                defenderKiPercentage, 
+                1, 
+                hasArcosianResilience !== null
+            );
 
             // Create defense type selection embed
             const embed = new EmbedBuilder()
@@ -114,9 +137,9 @@ module.exports = {
                 }
 
                 if (defenseType === 'block') {
-                    await handleBlock(interaction, defenderData, attackerData, defenderEffectivePL, effort, database);
+                    await handleBlock(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack);
                 } else if (defenseType === 'dodge') {
-                    await handleDodge(interaction, defenderData, attackerData, defenderEffectivePL, effort, database);
+                    await handleDodge(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack);
                 }
             });
 
@@ -140,11 +163,11 @@ module.exports = {
     }
 };
 
-async function handleBlock(interaction, defenderData, attackerData, defenderEffectivePL, effort, database) {
+async function handleBlock(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack) {
     const embed = new EmbedBuilder()
         .setColor(0x95a5a6)
         .setTitle('🛡️ Block Defense')
-        .setDescription('How would you like to modify your block?\n(Enter a number, use * for multiplier, or 0 for basic):');
+        .setDescription('How would you like to modify your block?\n(Enter a number, use * for multiplier, or 0 for basic)\nMultipliers: minimum 1.5, intervals of 0.5 (e.g., 1.5, 2.0, 2.5):');
 
     await interaction.update({ embeds: [embed], components: [] });
 
@@ -171,9 +194,17 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
         if (!isNaN(mult)) {
             if (mult === 1) {
                 isBasic = true;
+            } else if (mult >= 1.5) {
+                // Check if multiplier is in valid 0.5 intervals
+                const remainder = (mult - 1.0) % 0.5;
+                if (Math.abs(remainder) <= 0.001) { // Small tolerance for floating point precision
+                    modifier = mult;
+                    isMultiplier = true;
+                } else {
+                    return interaction.followUp('Multiplier must be in 0.5 intervals! (e.g., 1.5, 2.0, 2.5, 3.0, etc.)');
+                }
             } else {
-                modifier = mult;
-                isMultiplier = true;
+                return interaction.followUp('Multiplier must be at least 1.5!');
             }
         } else {
             isBasic = true;
@@ -195,8 +226,7 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     // Calculate ki cost for multiplied blocks
     let kiChange = 0;
     if (isMultiplier && !isBasic) {
-        const baseCost = Math.floor((modifier - 1) * 10); // 1 ki per 0.1 multiplier
-        const kiCost = calculateKiCost(baseCost, defenderData.control);
+        const kiCost = calculateKiSpecialCost(modifier, defenderData.control);
         kiChange = -kiCost;
     }
 
@@ -208,8 +238,14 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
         kiChange += Math.floor(defenderData.endurance * (Math.abs(effortKiCost) / 100));
     }
 
-    // Apply ki changes before rolling
+    // Check if defender has enough ki for the costs
     const currentKi = defenderData.current_ki || defenderData.endurance;
+    const totalKiCost = Math.abs(Math.min(0, kiChange)); // Get the total cost (negative changes)
+    if (totalKiCost > currentKi) {
+        return interaction.followUp(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
+    }
+
+    // Apply ki changes before rolling
     const newKi = Math.max(0, currentKi + kiChange);
     
     if (kiChange !== 0) {
@@ -221,7 +257,19 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
 
     // Calculate updated effective PL after ki loss
     const updatedKiPercentage = (newKi / defenderData.endurance) * 100;
-    const updatedEffectivePL = calculateEffectivePL(defenderData.base_pl, updatedKiPercentage);
+    
+    // Check for Arcosian Resilience racial
+    const hasArcosianResilience = await database.get(`
+        SELECT is_active FROM character_racials 
+        WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
+    `, [defenderData.active_character_id]);
+    
+    const updatedEffectivePL = calculateEffectivePL(
+        defenderData.base_pl, 
+        updatedKiPercentage, 
+        1, 
+        hasArcosianResilience !== null
+    );
 
     // Calculate block value
     let blockValue;
@@ -247,25 +295,26 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
         kiChange += basicKiGain;
     }
 
-    // Create result embed
-    const resultEmbed = new EmbedBuilder()
-        .setColor(0x95a5a6)
-        .setTitle('🛡️ Block Defense Result')
-        .setDescription(`**${defenderData.name}** defended with a value of **${finalBlockValue}**!`)
-        .addFields(
-            { name: 'Block Value', value: finalBlockValue.toString(), inline: true },
-            { name: 'Block Type', value: isBasic ? 'Basic' : (isMultiplier ? `${modifier}x` : `+${modifier}`), inline: true }
-        );
+    // Resolve combat
+    const combatResult = await resolveCombat(database, pendingAttack, 'block', finalBlockValue);
+    
+    // Create combat result embed
+    const combatEmbed = createCombatResultEmbed(attackerData.name, defenderData.name, combatResult, pendingAttack.attack_type);
+    
+    // Add defense details
+    combatEmbed.addFields(
+        { name: 'Block Type', value: isBasic ? 'Basic' : (isMultiplier ? `${modifier}x` : `+${modifier}`), inline: true }
+    );
 
     if (kiChange !== 0) {
-        resultEmbed.addFields({ 
-            name: 'Ki Change', 
+        combatEmbed.addFields({ 
+            name: 'Defender Ki Change', 
             value: `${kiChange > 0 ? '+' : ''}${kiChange}`, 
             inline: true 
         });
     }
 
-    await interaction.followUp({ embeds: [resultEmbed] });
+    await interaction.followUp({ embeds: [combatEmbed] });
     
     // Delete the user's modifier input message
     try {
@@ -275,11 +324,11 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     }
 }
 
-async function handleDodge(interaction, defenderData, attackerData, defenderEffectivePL, effort, database) {
+async function handleDodge(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack) {
     const embed = new EmbedBuilder()
         .setColor(0x3498db)
         .setTitle('💨 Dodge Defense')
-        .setDescription('How would you like to modify your dodge?\n(Enter a number, use * for multiplier, or 0 for basic):');
+        .setDescription('How would you like to modify your dodge?\n(Enter a number, use * for multiplier, or 0 for basic)\nMultipliers: minimum 1.5, intervals of 0.5 (e.g., 1.5, 2.0, 2.5):');
 
     await interaction.update({ embeds: [embed], components: [] });
 
@@ -306,9 +355,17 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         if (!isNaN(mult)) {
             if (mult === 1) {
                 isBasic = true;
+            } else if (mult >= 1.5) {
+                // Check if multiplier is in valid 0.5 intervals
+                const remainder = (mult - 1.0) % 0.5;
+                if (Math.abs(remainder) <= 0.001) { // Small tolerance for floating point precision
+                    modifier = mult;
+                    isMultiplier = true;
+                } else {
+                    return interaction.followUp('Multiplier must be in 0.5 intervals! (e.g., 1.5, 2.0, 2.5, 3.0, etc.)');
+                }
             } else {
-                modifier = mult;
-                isMultiplier = true;
+                return interaction.followUp('Multiplier must be at least 1.5!');
             }
         } else {
             isBasic = true;
@@ -330,8 +387,7 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     // Calculate ki cost for multiplied dodges
     let kiChange = 0;
     if (isMultiplier && !isBasic) {
-        const baseCost = Math.floor((modifier - 1) * 10); // 1 ki per 0.1 multiplier
-        const kiCost = calculateKiCost(baseCost, defenderData.control);
+        const kiCost = calculateKiSpecialCost(modifier, defenderData.control);
         kiChange = -kiCost;
     }
 
@@ -343,8 +399,14 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         kiChange += Math.floor(defenderData.endurance * (Math.abs(effortKiCost) / 100));
     }
 
-    // Apply ki changes before rolling
+    // Check if defender has enough ki for the costs
     const currentKi = defenderData.current_ki || defenderData.endurance;
+    const totalKiCost = Math.abs(Math.min(0, kiChange)); // Get the total cost (negative changes)
+    if (totalKiCost > currentKi) {
+        return interaction.followUp(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
+    }
+
+    // Apply ki changes before rolling
     const newKi = Math.max(0, currentKi + kiChange);
     
     if (kiChange !== 0) {
@@ -356,7 +418,19 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
 
     // Calculate updated effective PL after ki loss
     const updatedKiPercentage = (newKi / defenderData.endurance) * 100;
-    const updatedEffectivePL = calculateEffectivePL(defenderData.base_pl, updatedKiPercentage);
+    
+    // Check for Arcosian Resilience racial (recheck since this might be a different function)
+    const hasArcosianResilience2 = await database.get(`
+        SELECT is_active FROM character_racials 
+        WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
+    `, [defenderData.active_character_id]);
+    
+    const updatedEffectivePL = calculateEffectivePL(
+        defenderData.base_pl, 
+        updatedKiPercentage, 
+        1, 
+        hasArcosianResilience2 !== null
+    );
 
     // Calculate dodge value
     let dodgeValue;
@@ -371,9 +445,9 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     // Apply effort to dodge roll
     const finalDodgeValue = rollWithEffort(dodgeValue, effort);
 
-    // Note: In a real implementation, this would be compared against the attacker's accuracy
-    // For now, we'll just show the dodge result
-    
+    // For dodge, we also need the defender's defense stat for potential failed dodge pity block
+    const defenseValue = calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, 0);
+
     // Gain ki for basic dodges (after roll)
     if (isBasic) {
         const basicKiGain = Math.floor(defenderData.endurance * 0.05);
@@ -385,25 +459,26 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         kiChange += basicKiGain;
     }
 
-    // Create result embed
-    const resultEmbed = new EmbedBuilder()
-        .setColor(0x3498db)
-        .setTitle('💨 Dodge Defense Result')
-        .setDescription(`**${defenderData.name}** attempted to dodge with a value of **${finalDodgeValue}**!`)
-        .addFields(
-            { name: 'Dodge Value', value: finalDodgeValue.toString(), inline: true },
-            { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `${modifier}x` : `+${modifier}`), inline: true }
-        );
+    // Resolve combat with dodge
+    const combatResult = await resolveCombat(database, pendingAttack, 'dodge', defenseValue, finalDodgeValue);
+    
+    // Create combat result embed
+    const combatEmbed = createCombatResultEmbed(attackerData.name, defenderData.name, combatResult, pendingAttack.attack_type);
+    
+    // Add defense details
+    combatEmbed.addFields(
+        { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `${modifier}x` : `+${modifier}`), inline: true }
+    );
 
     if (kiChange !== 0) {
-        resultEmbed.addFields({ 
-            name: 'Ki Change', 
+        combatEmbed.addFields({ 
+            name: 'Defender Ki Change', 
             value: `${kiChange > 0 ? '+' : ''}${kiChange}`, 
             inline: true 
         });
     }
 
-    await interaction.followUp({ embeds: [resultEmbed] });
+    await interaction.followUp({ embeds: [combatEmbed] });
     
     // Delete the user's modifier input message
     try {
