@@ -30,6 +30,70 @@ async function calculateKiCap(database, character) {
     return Math.max(1, reducedCap); // Minimum 1 ki cap
 }
 
+// Handle Zenkai bonus calculation for Saiyans
+async function handleZenkaiBonus(database, attackerCharacterId, targetEffectivePL, channelId) {
+    try {
+        // Check if attacker is a Saiyan with Zenkai
+        const attackerRacials = await database.getCharacterWithRacials(attackerCharacterId);
+        if (!attackerRacials.racials || !attackerRacials.racials.includes('zenkai')) {
+            return; // Not a Saiyan, no Zenkai
+        }
+
+        // Get attacker's data to calculate their effective PL
+        const attackerData = await database.getUserWithActiveCharacter(attackerRacials.owner_id);
+        if (!attackerData) return;
+
+        // Calculate attacker's current effective PL (with existing Zenkai bonuses)
+        const attackerKiPercentage = attackerData.current_ki ? (attackerData.current_ki / attackerData.endurance) * 100 : 100;
+        
+        // Check for existing Zenkai bonus
+        let currentZenkaiBonus = 0;
+        const existingZenkai = await database.get(`
+            SELECT zenkai_bonus FROM combat_state 
+            WHERE character_id = ? AND channel_id = ?
+        `, [attackerCharacterId, channelId]);
+        
+        if (existingZenkai) {
+            currentZenkaiBonus = existingZenkai.zenkai_bonus || 0;
+        }
+
+        // Check for Arcosian Resilience
+        const hasArcosianResilience = await database.get(`
+            SELECT is_active FROM character_racials 
+            WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
+        `, [attackerCharacterId]);
+
+        const attackerEffectivePL = calculateEffectivePL(
+            attackerData.base_pl, 
+            attackerKiPercentage, 
+            1, 
+            hasArcosianResilience !== null,
+            currentZenkaiBonus
+        );
+
+        // Check if target had higher effective PL
+        if (targetEffectivePL > attackerEffectivePL) {
+            // Add 10% Base PL as Zenkai bonus
+            const newZenkaiBonus = currentZenkaiBonus + 10;
+            
+            // Store or update the Zenkai bonus
+            await database.run(`
+                INSERT OR REPLACE INTO combat_state 
+                (character_id, channel_id, zenkai_bonus, last_attacker_pl) 
+                VALUES (?, ?, ?, ?)
+            `, [attackerCharacterId, channelId, newZenkaiBonus, targetEffectivePL]);
+
+            console.log(`Zenkai activated for character ${attackerCharacterId}: ${currentZenkaiBonus}% -> ${newZenkaiBonus}%`);
+            return newZenkaiBonus;
+        }
+        
+        return currentZenkaiBonus;
+    } catch (error) {
+        console.error('Error handling Zenkai bonus:', error);
+        return 0;
+    }
+}
+
 // Calculate ki loss based on health percentage
 function calculateKiLossFromHealth(healthPercentage) {
     if (healthPercentage >= 100) return 0;
@@ -68,12 +132,18 @@ function calculateKiLossFromHealth(healthPercentage) {
 }
 
 // Calculate effective PL based on base PL, ki percentage, and forms
-function calculateEffectivePL(basePL, kiPercentage, formMultiplier = 1, hasArcosianResilience = false) {
+function calculateEffectivePL(basePL, kiPercentage, formMultiplier = 1, hasArcosianResilience = false, zenkaiBonus = 0) {
     const kiDebuff = calculateKiLossFromHealth(kiPercentage);
     const adjustedDebuff = hasArcosianResilience ? kiDebuff / 2 : kiDebuff;
     
-    const effectivePL = basePL * formMultiplier;
-    return Math.floor(effectivePL * (1 - adjustedDebuff / 100));
+    // Apply form multiplier to base PL
+    const formAdjustedPL = basePL * formMultiplier;
+    
+    // Add Zenkai bonus (flat percentage of base PL)
+    const zenkaiAdjustedPL = formAdjustedPL + (basePL * (zenkaiBonus / 100));
+    
+    // Apply ki debuff to final PL
+    return Math.floor(zenkaiAdjustedPL * (1 - adjustedDebuff / 100));
 }
 
 // Calculate maximum health based on base PL and endurance
@@ -344,5 +414,6 @@ module.exports = {
     generateHealthBar,
     generateKiBar,
     hasHumanSpirit,
-    calculateKiCap
+    calculateKiCap,
+    handleZenkaiBonus
 };

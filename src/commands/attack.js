@@ -107,11 +107,26 @@ module.exports = {
                 WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
             `, [attackerData.active_character_id]);
             
+            // Check for Zenkai bonus
+            let zenkaiBonus = 0;
+            const attackerRacials = await database.getCharacterWithRacials(attackerData.active_character_id);
+            if (attackerRacials.racials && attackerRacials.racials.includes('zenkai')) {
+                const zenkaiState = await database.get(`
+                    SELECT zenkai_bonus FROM combat_state 
+                    WHERE character_id = ? AND channel_id = ?
+                `, [attackerData.active_character_id, message.channel.id]);
+                
+                if (zenkaiState) {
+                    zenkaiBonus = zenkaiState.zenkai_bonus || 0;
+                }
+            }
+            
             const attackerEffectivePL = calculateEffectivePL(
                 attackerData.base_pl, 
                 attackerKiPercentage, 
                 1, 
-                hasArcosianResilience !== null
+                hasArcosianResilience !== null,
+                zenkaiBonus
             );
 
             // Create attack type selection embed
@@ -219,7 +234,11 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     });
 
     if (collected.size === 0) {
-        return interaction.followUp('Attack timed out.');
+        const timeoutEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('⏰ Attack Timed Out')
+            .setDescription('Attack timed out.');
+        return interaction.editReply({ embeds: [timeoutEmbed], components: [] });
     }
 
     const additiveInput = collected.first().content;
@@ -265,7 +284,11 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         const currentKi = attackerData.current_ki || attackerData.endurance;
         const totalKiCost = Math.abs(Math.min(0, kiChange)); // Get the total cost (negative changes)
         if (totalKiCost > currentKi) {
-            return interaction.followUp(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
+            const errorEmbed = new EmbedBuilder()
+                .setColor(0xe74c3c)
+                .setTitle('❌ Insufficient Ki')
+                .setDescription(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
+            return interaction.editReply({ embeds: [errorEmbed], components: [] });
         }
     }
 
@@ -281,16 +304,17 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     // Get attacker's username for mention
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
-    // Create result embed
+    // Create final result embed
     const resultEmbed = new EmbedBuilder()
         .setColor(0xe74c3c)
         .setTitle('💥 Physical Attack Launched')
-        .setDescription(`**${attackerData.name}** has launched a physical attack against **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*`)
+        .setDescription(`**${attackerData.name}** launched a physical attack against **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*`)
         .addFields(
             { name: 'Attack Damage', value: damage.toString(), inline: true },
             { name: 'Accuracy', value: accuracy.toString(), inline: true },
             { name: 'Attack Type', value: additive === 0 ? 'Basic' : 'Enhanced', inline: true }
-        );
+        )
+        .setFooter({ text: 'Target must defend within 5 minutes or take full damage!' });
 
     if (kiChange !== 0) {
         resultEmbed.addFields({ 
@@ -321,9 +345,8 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         attackData
     );
 
-    resultEmbed.setFooter({ text: 'Attack pending - target must defend within 5 minutes or take full damage!' });
-
-    await interaction.followUp({ embeds: [resultEmbed] });
+    // Edit the original message with the final result
+    await interaction.editReply({ embeds: [resultEmbed], components: [] });
     
     // Delete the user's additive input message
     try {
@@ -350,7 +373,11 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     });
 
     if (collected.size === 0) {
-        return interaction.followUp('Attack timed out.');
+        const timeoutEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('⏰ Attack Timed Out')
+            .setDescription('Attack timed out.');
+        return interaction.editReply({ embeds: [timeoutEmbed], components: [] });
     }
 
     const multiplierInput = collected.first().content;
@@ -358,13 +385,21 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
 
     // Validate multiplier
     if (isNaN(multiplier) || multiplier < 1.5) {
-        return interaction.followUp('Multiplier must be at least 1.5!');
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Invalid Multiplier')
+            .setDescription('Multiplier must be at least 1.5!');
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
     // Check if multiplier is in valid 0.5 intervals
     const remainder = (multiplier - 1.0) % 0.5;
     if (Math.abs(remainder) > 0.001) { // Small tolerance for floating point precision
-        return interaction.followUp('Multiplier must be in 0.5 intervals! (e.g., 1.5, 2.0, 2.5, 3.0, etc.)');
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Invalid Interval')
+            .setDescription('Multiplier must be in 0.5 intervals! (e.g., 1.5, 2.0, 2.5, 3.0, etc.)');
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
     // Calculate ki cost using new system
@@ -396,7 +431,11 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     
     // Check if attacker has enough ki for all costs
     if (totalKiCost > currentKi) {
-        return interaction.followUp(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Insufficient Ki')
+            .setDescription(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
     // Calculate blowback damage
@@ -442,17 +481,18 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     // Get attacker's username for mention
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
-    // Create result embed
+    // Create final result embed
     const resultEmbed = new EmbedBuilder()
         .setColor(0x3498db)
         .setTitle('⚡ Ki Attack Launched')
-        .setDescription(`**${attackerData.name}** has launched a ki attack against **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*`)
+        .setDescription(`**${attackerData.name}** launched a ki attack against **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*`)
         .addFields(
             { name: 'Attack Damage', value: damage.toString(), inline: true },
             { name: 'Accuracy', value: accuracy.toString(), inline: true },
             { name: 'Multiplier', value: `${multiplier}x`, inline: true },
             { name: 'Ki Cost', value: totalKiCost.toString(), inline: true }
-        );
+        )
+        .setFooter({ text: 'Target must defend within 5 minutes or take full damage!' });
 
     if (blowbackDamage > 0) {
         resultEmbed.addFields({ 
@@ -484,9 +524,8 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
         attackData
     );
 
-    resultEmbed.setFooter({ text: 'Attack pending - target must defend within 5 minutes or take full damage!' });
-
-    await interaction.followUp({ embeds: [resultEmbed] });
+    // Edit the original message with the final result
+    await interaction.editReply({ embeds: [resultEmbed], components: [] });
     
     // Delete the user's multiplier input message
     try {

@@ -1,6 +1,6 @@
 # 🐉 Dragon Ball Finality Discord Bot
 
-[![Version](https://img.shields.io/badge/version-0.0.1--alpha-orange.svg)](https://github.com/AMXgaming111/dragon-ball-finality/releases)
+[![Version](https://img.shields.io/badge/version-0.0.2-orange.svg)](https://github.com/AMXgaming111/dragon-ball-finality/releases)
 [![Discord.js](https://img.shields.io/badge/discord.js-v14.21.0-blue.svg)](https://discord.js.org/)
 [![Node.js](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
@@ -145,6 +145,14 @@ A comprehensive Discord RPG bot for Dragon Ball-themed servers featuring turn-ba
 ```
 
 ## 📊 Version History
+
+- **v0.0.2** (2025-08-10) - Combat System Enhancements & UI Improvements
+  - Fixed Zenkai system integration across all combat commands
+  - Streamlined attack/defend UI (reduced from 4 to 2 messages)
+  - Enhanced form modifier parsing (supports multiple formats)
+  - Removed "DEFEATED" status, allows negative health values
+  - Added comprehensive bot invitation system
+  - Fixed critical combat bugs and error handling
 
 - **v0.0.1-alpha** (2025-08-05) - Initial alpha release with core features
   - Character management system

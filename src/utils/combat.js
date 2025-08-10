@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateMaxHealth, generateHealthBar } = require('./calculations');
+const { calculateMaxHealth, generateHealthBar, handleZenkaiBonus } = require('./calculations');
 
 /**
  * Store a pending attack in the database
@@ -100,7 +100,7 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
         if (targetData) {
             const maxHealth = targetData.base_pl * targetData.endurance;
             const currentHealth = targetData.current_health || maxHealth;
-            const newHealth = Math.max(0, currentHealth - finalDamage);
+           const newHealth = currentHealth - finalDamage; // Allow negative health
             
             await database.run(
                 'UPDATE characters SET current_health = ? WHERE id = ?',
@@ -130,6 +130,58 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
                 newHealth: newHealth,
                 maxHealth: maxHealth
             };
+        }
+        
+        // Handle Zenkai bonus for successful attacks
+        try {
+            // Get target's effective PL before the attack
+            const targetData = await database.getUserWithActiveCharacter(pendingAttack.target_user_id);
+            if (targetData) {
+                const targetKiPercentage = targetData.current_ki ? (targetData.current_ki / targetData.endurance) * 100 : 100;
+                
+                // Check for target's Arcosian Resilience
+                const targetHasArcosianResilience = await database.get(`
+                    SELECT is_active FROM character_racials 
+                    WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
+                `, [pendingAttack.target_character_id]);
+                
+                // Get target's Zenkai bonus
+                let targetZenkaiBonus = 0;
+                const targetRacials = await database.getCharacterWithRacials(pendingAttack.target_character_id);
+                if (targetRacials.racials && targetRacials.racials.includes('zenkai')) {
+                    const targetZenkaiState = await database.get(`
+                        SELECT zenkai_bonus FROM combat_state 
+                        WHERE character_id = ? AND channel_id = ?
+                    `, [pendingAttack.target_character_id, pendingAttack.channel_id]);
+                    
+                    if (targetZenkaiState) {
+                        targetZenkaiBonus = targetZenkaiState.zenkai_bonus || 0;
+                    }
+                }
+                
+                const { calculateEffectivePL } = require('./calculations');
+                const targetEffectivePL = calculateEffectivePL(
+                    targetData.base_pl, 
+                    targetKiPercentage, 
+                    1, 
+                    targetHasArcosianResilience !== null,
+                    targetZenkaiBonus
+                );
+                
+                // Check for Zenkai bonus for the attacker
+                const zenkaiResult = await handleZenkaiBonus(
+                    database, 
+                    pendingAttack.attacker_character_id, 
+                    targetEffectivePL, 
+                    pendingAttack.channel_id
+                );
+                
+                if (zenkaiResult && zenkaiResult > 0) {
+                    console.log(`Zenkai bonus applied: ${zenkaiResult}%`);
+                }
+            }
+        } catch (error) {
+            console.error('Error handling Zenkai in combat resolution:', error);
         }
     }
     
@@ -188,9 +240,8 @@ function createCombatResultEmbed(attackerName, targetName, combatResult, attackT
             inline: false
         });
         
-        if (newHealth <= 0) {
-            embed.addFields({ name: 'Status', value: '💀 **DEFEATED**', inline: false });
-        } else if (healthPercentage < 20) {
+        // Only show critical status if health is positive but below 20%
+        if (newHealth > 0 && healthPercentage < 20) {
             embed.addFields({ name: 'Status', value: '⚠️ **CRITICAL**', inline: false });
         }
     }

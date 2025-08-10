@@ -68,12 +68,26 @@ module.exports = {
             const healthPercentage = calculateHealthPercentage(currentHealth, maxHealth);
             const kiPercentage = calculateHealthPercentage(currentKi, maxKi);
 
+            // Check for Zenkai bonus
+            let zenkaiBonus = 0;
+            if (racials.includes('zenkai')) {
+                const zenkaiState = await database.get(`
+                    SELECT zenkai_bonus FROM combat_state 
+                    WHERE character_id = ? AND channel_id = ?
+                `, [userData.active_character_id, message.channel.id]);
+                
+                if (zenkaiState) {
+                    zenkaiBonus = zenkaiState.zenkai_bonus || 0;
+                }
+            }
+
             // Calculate effective PL
             const effectivePL = calculateEffectivePL(
                 userData.base_pl, 
                 kiPercentage, 
                 formMultiplier, 
-                hasArcosianResilience
+                hasArcosianResilience,
+                zenkaiBonus
             );
 
             // Create embed
@@ -91,6 +105,15 @@ module.exports = {
                 )
                 .setFooter({ text: `Owner: ${targetUser.username}` })
                 .setTimestamp();
+
+            // Add Zenkai bonus if active
+            if (zenkaiBonus > 0) {
+                embed.addFields({ 
+                    name: 'Zenkai Boost', 
+                    value: `+${zenkaiBonus}% PL`, 
+                    inline: true 
+                });
+            }
 
             // Add current form if any
             if (currentForm) {

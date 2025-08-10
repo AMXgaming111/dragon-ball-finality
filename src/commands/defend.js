@@ -73,11 +73,26 @@ module.exports = {
                 WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
             `, [defenderData.active_character_id]);
             
+            // Check for Zenkai bonus
+            let zenkaiBonus = 0;
+            const defenderRacials = await database.getCharacterWithRacials(defenderData.active_character_id);
+            if (defenderRacials.racials && defenderRacials.racials.includes('zenkai')) {
+                const zenkaiState = await database.get(`
+                    SELECT zenkai_bonus FROM combat_state 
+                    WHERE character_id = ? AND channel_id = ?
+                `, [defenderData.active_character_id, message.channel.id]);
+                
+                if (zenkaiState) {
+                    zenkaiBonus = zenkaiState.zenkai_bonus || 0;
+                }
+            }
+            
             const defenderEffectivePL = calculateEffectivePL(
                 defenderData.base_pl, 
                 defenderKiPercentage, 
                 1, 
-                hasArcosianResilience !== null
+                hasArcosianResilience !== null,
+                zenkaiBonus
             );
 
             // Create defense type selection embed
@@ -180,7 +195,11 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     });
 
     if (collected.size === 0) {
-        return interaction.followUp('Defense timed out.');
+        const timeoutEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('⏰ Defense Timed Out')
+            .setDescription('Defense timed out.');
+        return interaction.editReply({ embeds: [timeoutEmbed], components: [] });
     }
 
     const modifierInput = collected.first().content;
@@ -201,10 +220,18 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
                     modifier = mult;
                     isMultiplier = true;
                 } else {
-                    return interaction.followUp('Multiplier must be in 0.5 intervals! (e.g., 1.5, 2.0, 2.5, 3.0, etc.)');
+                    const errorEmbed = new EmbedBuilder()
+                        .setColor(0xe74c3c)
+                        .setTitle('❌ Invalid Interval')
+                        .setDescription('Multiplier must be in 0.5 intervals! (e.g., 1.5, 2.0, 2.5, 3.0, etc.)');
+                    return interaction.editReply({ embeds: [errorEmbed], components: [] });
                 }
             } else {
-                return interaction.followUp('Multiplier must be at least 1.5!');
+                const errorEmbed = new EmbedBuilder()
+                    .setColor(0xe74c3c)
+                    .setTitle('❌ Invalid Multiplier')
+                    .setDescription('Multiplier must be at least 1.5!');
+                return interaction.editReply({ embeds: [errorEmbed], components: [] });
             }
         } else {
             isBasic = true;
@@ -242,7 +269,11 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     const currentKi = defenderData.current_ki || defenderData.endurance;
     const totalKiCost = Math.abs(Math.min(0, kiChange)); // Get the total cost (negative changes)
     if (totalKiCost > currentKi) {
-        return interaction.followUp(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Insufficient Ki')
+            .setDescription(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
     // Apply ki changes before rolling
@@ -264,11 +295,27 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
         WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
     `, [defenderData.active_character_id]);
     
+    // Calculate Zenkai bonus for defender
+    let zenkaiBonus = 0;
+    const defenderRacials = await database.getCharacterWithRacials(defenderData.active_character_id);
+    if (defenderRacials.racials && defenderRacials.racials.includes('zenkai')) {
+        const zenkaiState = await database.get(`
+            SELECT zenkai_bonus FROM combat_state 
+            WHERE character_id = ? AND channel_id = ?
+        `, [defenderData.active_character_id, pendingAttack.channel_id]);
+        
+        if (zenkaiState) {
+            zenkaiBonus = zenkaiState.zenkai_bonus || 0;
+        }
+    }
+    
+    // Use the same Zenkai bonus from earlier
     const updatedEffectivePL = calculateEffectivePL(
         defenderData.base_pl, 
         updatedKiPercentage, 
         1, 
-        hasArcosianResilience !== null
+        hasArcosianResilience !== null,
+        zenkaiBonus
     );
 
     // Calculate block value
@@ -298,10 +345,10 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     // Resolve combat
     const combatResult = await resolveCombat(database, pendingAttack, 'block', finalBlockValue);
     
-    // Create combat result embed
+    // Create combined combat result embed
     const combatEmbed = createCombatResultEmbed(attackerData.name, defenderData.name, combatResult, pendingAttack.attack_type);
     
-    // Add defense details
+    // Add defense details to the same embed
     combatEmbed.addFields(
         { name: 'Block Type', value: isBasic ? 'Basic' : (isMultiplier ? `${modifier}x` : `+${modifier}`), inline: true }
     );
@@ -314,7 +361,8 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
         });
     }
 
-    await interaction.followUp({ embeds: [combatEmbed] });
+    // Edit the original message with the final combat result
+    await interaction.editReply({ embeds: [combatEmbed], components: [] });
     
     // Delete the user's modifier input message
     try {
@@ -341,7 +389,11 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     });
 
     if (collected.size === 0) {
-        return interaction.followUp('Defense timed out.');
+        const timeoutEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('⏰ Defense Timed Out')
+            .setDescription('Defense timed out.');
+        return interaction.editReply({ embeds: [timeoutEmbed], components: [] });
     }
 
     const modifierInput = collected.first().content;
@@ -362,10 +414,18 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
                     modifier = mult;
                     isMultiplier = true;
                 } else {
-                    return interaction.followUp('Multiplier must be in 0.5 intervals! (e.g., 1.5, 2.0, 2.5, 3.0, etc.)');
+                    const errorEmbed = new EmbedBuilder()
+                        .setColor(0xe74c3c)
+                        .setTitle('❌ Invalid Interval')
+                        .setDescription('Multiplier must be in 0.5 intervals! (e.g., 1.5, 2.0, 2.5, 3.0, etc.)');
+                    return interaction.editReply({ embeds: [errorEmbed], components: [] });
                 }
             } else {
-                return interaction.followUp('Multiplier must be at least 1.5!');
+                const errorEmbed = new EmbedBuilder()
+                    .setColor(0xe74c3c)
+                    .setTitle('❌ Invalid Multiplier')
+                    .setDescription('Multiplier must be at least 1.5!');
+                return interaction.editReply({ embeds: [errorEmbed], components: [] });
             }
         } else {
             isBasic = true;
@@ -403,7 +463,11 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     const currentKi = defenderData.current_ki || defenderData.endurance;
     const totalKiCost = Math.abs(Math.min(0, kiChange)); // Get the total cost (negative changes)
     if (totalKiCost > currentKi) {
-        return interaction.followUp(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Insufficient Ki')
+            .setDescription(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
     // Apply ki changes before rolling
@@ -425,11 +489,27 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
     `, [defenderData.active_character_id]);
     
+    // Calculate Zenkai bonus for defender
+    let zenkaiBonus = 0;
+    const defenderRacials = await database.getCharacterWithRacials(defenderData.active_character_id);
+    if (defenderRacials.racials && defenderRacials.racials.includes('zenkai')) {
+        const zenkaiState = await database.get(`
+            SELECT zenkai_bonus FROM combat_state 
+            WHERE character_id = ? AND channel_id = ?
+        `, [defenderData.active_character_id, pendingAttack.channel_id]);
+        
+        if (zenkaiState) {
+            zenkaiBonus = zenkaiState.zenkai_bonus || 0;
+        }
+    }
+    
+    // Use the same Zenkai bonus from earlier
     const updatedEffectivePL = calculateEffectivePL(
         defenderData.base_pl, 
         updatedKiPercentage, 
         1, 
-        hasArcosianResilience2 !== null
+        hasArcosianResilience2 !== null,
+        zenkaiBonus
     );
 
     // Calculate dodge value
@@ -462,10 +542,10 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     // Resolve combat with dodge
     const combatResult = await resolveCombat(database, pendingAttack, 'dodge', defenseValue, finalDodgeValue);
     
-    // Create combat result embed
+    // Create combined combat result embed
     const combatEmbed = createCombatResultEmbed(attackerData.name, defenderData.name, combatResult, pendingAttack.attack_type);
     
-    // Add defense details
+    // Add defense details to the same embed
     combatEmbed.addFields(
         { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `${modifier}x` : `+${modifier}`), inline: true }
     );
@@ -478,7 +558,8 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         });
     }
 
-    await interaction.followUp({ embeds: [combatEmbed] });
+    // Edit the original message with the final combat result
+    await interaction.editReply({ embeds: [combatEmbed], components: [] });
     
     // Delete the user's modifier input message
     try {
