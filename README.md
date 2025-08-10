@@ -1,4 +1,4 @@
-# 🐉 Dragon Ball Finality Discord Bot
+# 🐉 Shenron Discord Bot
 
 [![Version](https://img.shields.io/badge/version-0.0.2-orange.svg)](https://github.com/AMXgaming111/dragon-ball-finality/releases)
 [![Discord.js](https://img.shields.io/badge/discord.js-v14.21.0-blue.svg)](https://discord.js.org/)
