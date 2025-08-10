@@ -189,38 +189,38 @@ function calculateKiSpecialCost(multiplier, control) {
 
 // Calculate physical attack damage
 function calculatePhysicalAttack(effectivePL, strength, additive = 0) {
-    return Math.floor(effectivePL * ((strength + additive) / 10));
+    return Math.max(1, Math.floor(effectivePL * ((strength + additive) / 10))); // Ensure minimum damage of 1
 }
 
 // Calculate ki attack damage
 function calculateKiAttack(effectivePL, multiplier = 1) {
-    return Math.floor(effectivePL * 10 * multiplier);
+    return Math.max(1, Math.floor(effectivePL * 10 * multiplier)); // Ensure minimum damage of 1
 }
 
 // Calculate accuracy/agility roll
 function calculateAccuracy(effectivePL, agility, modifier = 0, isMultiplier = false) {
     if (isMultiplier) {
-        return Math.floor((effectivePL * (agility / 10)) * modifier);
+        return Math.max(1, Math.floor((effectivePL * (agility / 10)) * modifier)); // Ensure minimum accuracy of 1
     } else {
-        return Math.floor(effectivePL * ((agility + modifier) / 10));
+        return Math.max(1, Math.floor(effectivePL * ((agility + modifier) / 10))); // Ensure minimum accuracy of 1
     }
 }
 
 // Calculate block value
 function calculateBlock(effectivePL, defense, modifier = 0, isMultiplier = false) {
     if (isMultiplier) {
-        return Math.floor((effectivePL * (defense / 10)) * modifier);
+        return Math.max(1, Math.floor((effectivePL * (defense / 10)) * modifier)); // Ensure minimum block of 1
     } else {
-        return Math.floor(effectivePL * ((defense + modifier) / 10));
+        return Math.max(1, Math.floor(effectivePL * ((defense + modifier) / 10))); // Ensure minimum block of 1
     }
 }
 
 // Calculate dodge value
 function calculateDodge(effectivePL, agility, modifier = 0, isMultiplier = false) {
     if (isMultiplier) {
-        return Math.floor((effectivePL * (agility / 10)) * modifier);
+        return Math.max(1, Math.floor((effectivePL * (agility / 10)) * modifier)); // Ensure minimum dodge of 1
     } else {
-        return Math.floor(effectivePL * ((agility + modifier) / 10));
+        return Math.max(1, Math.floor(effectivePL * ((agility + modifier) / 10))); // Ensure minimum dodge of 1
     }
 }
 
@@ -237,7 +237,7 @@ function rollWithEffort(baseValue, effort = 2) {
     const range = effortRanges[effort] || effortRanges[2];
     const multiplier = Math.random() * (range.max - range.min) + range.min;
     
-    return Math.floor(baseValue * multiplier);
+    return Math.max(1, Math.floor(baseValue * multiplier)); // Ensure minimum roll of 1
 }
 
 // Get effort ki cost percentage
@@ -330,13 +330,13 @@ function hasStaffRole(member, staffRoleName = 'Staff') {
 
 // Calculate physical defense (blocking)
 function calculatePhysicalDefense(effectivePL, defense, additive = 0) {
-    return Math.floor(effectivePL * ((defense + additive) / 10));
+    return Math.max(1, Math.floor(effectivePL * ((defense + additive) / 10))); // Ensure minimum defense of 1
 }
 
 // Calculate ki defense (blocking with ki enhancement)
 function calculateKiDefense(effectivePL, defense, multiplier = 1) {
     const baseDefense = Math.floor(effectivePL * (defense / 10));
-    return Math.floor(baseDefense * multiplier);
+    return Math.max(1, Math.floor(baseDefense * multiplier)); // Ensure minimum defense of 1
 }
 
 // Generate health bar visualization

@@ -71,9 +71,9 @@ module.exports = {
                     let roll = Math.floor(Math.random() * statValue) + 1;
                     
                     if (isMultiplier) {
-                        roll = Math.floor(roll * modifier);
+                        roll = Math.max(1, Math.floor(roll * modifier)); // Ensure minimum roll of 1
                     } else if (modifier !== 0) {
-                        roll += modifier;
+                        roll = Math.max(1, roll + modifier); // Ensure minimum roll of 1
                     }
                     
                     rollResults.push(roll);
@@ -92,9 +92,9 @@ module.exports = {
                     let roll = Math.floor(Math.random() * maxValue) + 1;
                     
                     if (isMultiplier) {
-                        roll = Math.floor(roll * modifier);
+                        roll = Math.max(1, Math.floor(roll * modifier)); // Ensure minimum roll of 1
                     } else if (modifier !== 0) {
-                        roll += modifier;
+                        roll = Math.max(1, roll + modifier); // Ensure minimum roll of 1
                     }
                     
                     rollResults.push(roll);
