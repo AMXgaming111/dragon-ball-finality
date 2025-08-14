@@ -140,23 +140,9 @@ module.exports = {
 
                 currentHealth = newHealth;
 
-                // Update ki maximum based on new health percentage with Human Spirit consideration
-                const { calculateKiCap } = require('../utils/calculations');
-                const newKiCap = await calculateKiCap(database, {
-                    id: userData.active_character_id,
-                    base_pl: userData.base_pl,
-                    endurance: userData.endurance,
-                    current_health: currentHealth
-                });
-                
-                // Don't increase current ki, only limit maximum
-                const currentKi = userData.current_ki || userData.endurance;
-                const adjustedKi = Math.min(currentKi, newKiCap);
-                
-                await database.run(
-                    'UPDATE characters SET current_ki = ? WHERE id = ?',
-                    [adjustedKi, userData.active_character_id]
-                );
+                // Update ki maximum based on new health percentage - automatically enforce cap
+                const { enforceKiCap } = require('../utils/calculations');
+                await enforceKiCap(database, userData.active_character_id);
             }
 
             // Calculate current health percentage

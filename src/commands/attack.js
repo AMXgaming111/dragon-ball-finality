@@ -1,6 +1,8 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { 
-    calculateEffectivePL, 
+    calculateEffectivePL,
+    calculateEffectivePLWithRelease,
+    calculateMaxAffordableMultiplier,
     calculatePhysicalAttack, 
     calculateKiAttack, 
     calculateAccuracy,
@@ -8,7 +10,8 @@ const {
     getEffortKiCost,
     calculateKiSpecialCost,
     calculateBlowback,
-    getCombatBonuses
+    getCombatBonuses,
+    getCurrentKiCap
 } = require('../utils/calculations');
 const { storePendingAttack, cleanupExpiredAttacks } = require('../utils/combat');
 const { autoManageTurnOrder } = require('../../helper_functions');
@@ -100,11 +103,13 @@ module.exports = {
             // Get combat bonuses (Zenkai and Majin Magic)
             const combatBonuses = await getCombatBonuses(database, attackerData.active_character_id, message.channel.id);
             
-            const attackerEffectivePL = calculateEffectivePL(
+            const attackerEffectivePL = await calculateEffectivePLWithRelease(
+                database,
+                attackerData.active_character_id,
                 attackerData.base_pl, 
                 attackerKiPercentage, 
                 1, 
-                hasArcosianResilience !== null,
+                !!hasArcosianResilience,
                 combatBonuses.zenkaiBonus,
                 combatBonuses.majinMagicBonus
             );
@@ -198,12 +203,23 @@ module.exports = {
 };
 
 async function handlePhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+    // Check for Namekian Giant Form bonus for max additive calculation
+    let effectiveStrength = attackerData.strength;
+    const giantForm = await database.get(`
+        SELECT is_active FROM character_racials 
+        WHERE character_id = ? AND racial_tag = 'ngiant' AND is_active = 1
+    `, [attackerData.active_character_id]);
+    
+    if (giantForm) {
+        effectiveStrength += 40; // Giant form grants +40 strength
+    }
+    
+    const maxAdditive = ((effectiveStrength + attackerData.endurance + attackerData.control) / 6).toFixed(2);
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
         .setTitle('💪 Physical Attack')
-        .setDescription('Please type your additive (or 0 for basic attack):');
-
-    await interaction.update({ embeds: [embed], components: [] });
+        .setDescription('Please type your additive (or 0 for basic attack):')
+        .addFields({ name: 'Max Additive', value: `Your maximum additive is **${maxAdditive}**`, inline: false });    await interaction.update({ embeds: [embed], components: [] });
 
     // Wait for user input
     const filter = (msg) => msg.author.id === interaction.user.id;
@@ -274,7 +290,15 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
 
     // Update attacker's ki
     if (kiChange !== 0) {
-        const newKi = Math.max(0, (attackerData.current_ki || attackerData.endurance) + kiChange);
+        const currentKi = attackerData.current_ki || attackerData.endurance;
+        let newKi = Math.max(0, currentKi + kiChange);
+        
+        // For basic attacks, respect health cap
+        if (additive === 0 && accuracyMultiplier === 1 && kiChange > 0) {
+            const kiCap = await getCurrentKiCap(database, attackerData.active_character_id);
+            newKi = Math.min(kiCap, newKi);
+        }
+        
         await database.run(
             'UPDATE characters SET current_ki = ? WHERE id = ?',
             [newKi, attackerData.active_character_id]
@@ -304,6 +328,20 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         });
     }
 
+    // Add turn management footer and buttons
+    resultEmbed.setFooter({ text: 'Would you like to end your turn?' });
+    const turnRow = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('end_turn_yes')
+                .setLabel('Yes')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId('end_turn_no')
+                .setLabel('No')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
     // Store the pending attack
     const attackData = {
         additive: additive,
@@ -326,7 +364,38 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     );
 
     // Edit the original message with the final result
-    await interaction.editReply({ embeds: [resultEmbed], components: [] });
+    const attackMessage = await interaction.editReply({ embeds: [resultEmbed], components: [turnRow] });
+    
+    // Handle turn management button interaction
+    const turnFilter = (buttonInteraction) => {
+        return (buttonInteraction.customId === 'end_turn_yes' || buttonInteraction.customId === 'end_turn_no') && 
+               buttonInteraction.user.id === interaction.user.id;
+    };
+
+    try {
+        const turnInteraction = await attackMessage.awaitMessageComponent({ 
+            filter: turnFilter, 
+            time: 60000 
+        });
+
+        if (turnInteraction.customId === 'end_turn_yes') {
+            const { advanceTurnFromInteraction } = require('../../helper_functions');
+            await advanceTurnFromInteraction(turnInteraction, database);
+        } else {
+            // User chose not to end turn
+            await turnInteraction.update({ 
+                embeds: [resultEmbed], 
+                components: [] 
+            });
+        }
+    } catch (error) {
+        // Timeout or error - remove buttons
+        try {
+            await interaction.editReply({ embeds: [resultEmbed], components: [] });
+        } catch (e) {
+            // Ignore edit errors
+        }
+    }
     
     // Delete the user's additive input message
     try {
@@ -337,10 +406,29 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
 }
 
 async function handleKiAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+    // Calculate maximum affordable multiplier
+    const attackerCurrentKi = attackerData.current_ki || attackerData.endurance;
+    const maxMultiplier = calculateMaxAffordableMultiplier(attackerCurrentKi, attackerData.control, effort, accuracyMultiplier, attackerData.endurance);
+    
+    // Check if any multipliers are affordable
+    if (maxMultiplier === 0) {
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Insufficient Ki')
+            .setDescription('You don\'t have enough ki to perform any ki attacks with the current effort level and modifiers!')
+            .addFields(
+                { name: 'Current Ki', value: attackerCurrentKi.toString(), inline: true },
+                { name: 'Effort Level', value: `${effort}/5`, inline: true },
+                { name: 'Suggestion', value: 'Try lowering your effort level or use a physical attack instead.', inline: false }
+            );
+        return interaction.update({ embeds: [errorEmbed], components: [] });
+    }
+    
     const embed = new EmbedBuilder()
         .setColor(0x3498db)
         .setTitle('⚡ Ki Attack')
-        .setDescription('Please type your multiplier (minimum 1.5, intervals of 0.5):\nExamples: 1.5, 2.0, 2.5, 3.0, etc.');
+        .setDescription('Please type your multiplier (minimum 1.5, intervals of 0.5):\nExamples: 1.5, 2.0, 2.5, 3.0, etc.')
+        .addFields({ name: 'Max Affordable Multiplier', value: `With your current ki, you can afford up to **${maxMultiplier}x**`, inline: false });
 
     await interaction.update({ embeds: [embed], components: [] });
 
@@ -439,23 +527,9 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
             [newHealth, attackerData.active_character_id]
         );
         
-        // Update ki cap based on new health percentage with Human Spirit consideration
-        const { calculateKiCap } = require('../utils/calculations');
-        const newKiCap = await calculateKiCap(database, {
-            id: attackerData.active_character_id,
-            base_pl: attackerData.base_pl,
-            endurance: attackerData.endurance,
-            current_health: newHealth
-        });
-        
-        // Don't increase current ki, only limit maximum
-        const attackerCurrentKi = newKi; // Use the updated ki from earlier
-        const adjustedKi = Math.min(attackerCurrentKi, newKiCap);
-        
-        await database.run(
-            'UPDATE characters SET current_ki = ? WHERE id = ?',
-            [adjustedKi, attackerData.active_character_id]
-        );
+        // Update ki cap based on new health percentage - automatically enforce cap
+        const { enforceKiCap } = require('../utils/calculations');
+        await enforceKiCap(database, attackerData.active_character_id);
     }
 
     // Get attacker's username for mention
@@ -482,6 +556,20 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
         });
     }
 
+    // Add turn management footer and buttons
+    resultEmbed.setFooter({ text: 'Would you like to end your turn?' });
+    const turnRow = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('end_turn_yes')
+                .setLabel('Yes')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId('end_turn_no')
+                .setLabel('No')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
     // Store the pending attack
     const attackData = {
         multiplier: multiplier,
@@ -505,7 +593,38 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     );
 
     // Edit the original message with the final result
-    await interaction.editReply({ embeds: [resultEmbed], components: [] });
+    const attackMessage = await interaction.editReply({ embeds: [resultEmbed], components: [turnRow] });
+    
+    // Handle turn management button interaction
+    const turnFilter = (buttonInteraction) => {
+        return (buttonInteraction.customId === 'end_turn_yes' || buttonInteraction.customId === 'end_turn_no') && 
+               buttonInteraction.user.id === interaction.user.id;
+    };
+
+    try {
+        const turnInteraction = await attackMessage.awaitMessageComponent({ 
+            filter: turnFilter, 
+            time: 60000 
+        });
+
+        if (turnInteraction.customId === 'end_turn_yes') {
+            const { advanceTurnFromInteraction } = require('../../helper_functions');
+            await advanceTurnFromInteraction(turnInteraction, database);
+        } else {
+            // User chose not to end turn
+            await turnInteraction.update({ 
+                embeds: [resultEmbed], 
+                components: [] 
+            });
+        }
+    } catch (error) {
+        // Timeout or error - remove buttons
+        try {
+            await interaction.editReply({ embeds: [resultEmbed], components: [] });
+        } catch (e) {
+            // Ignore edit errors
+        }
+    }
     
     // Delete the user's multiplier input message
     try {

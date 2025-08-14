@@ -117,23 +117,9 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
                 }
             }
             
-            // Update ki cap based on new health percentage with Human Spirit consideration
-            const { calculateKiCap } = require('./calculations');
-            const newKiCap = await calculateKiCap(database, {
-                id: pendingAttack.target_character_id,
-                base_pl: targetData.base_pl,
-                endurance: targetData.endurance,
-                current_health: newHealth
-            });
-            
-            // Don't increase current ki, only limit maximum
-            const currentKi = targetData.current_ki || targetData.endurance;
-            const adjustedKi = Math.min(currentKi, newKiCap);
-            
-            await database.run(
-                'UPDATE characters SET current_ki = ? WHERE id = ?',
-                [adjustedKi, pendingAttack.target_character_id]
-            );
+            // Update ki cap based on new health percentage - automatically enforce cap
+            const { enforceKiCap } = require('./calculations');
+            await enforceKiCap(database, pendingAttack.target_character_id);
             
             combatResult.healthUpdate = {
                 oldHealth: currentHealth,

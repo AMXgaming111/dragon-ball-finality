@@ -1,6 +1,6 @@
 # 🐉 Shenron Discord Bot
 
-[![Version](https://img.shields.io/badge/version-0.0.3-orange.svg)](https://github.com/AMXgaming111/dragon-ball-finality/releases)
+[![Version](https://img.shields.io/badge/version-0.0.4-orange.svg)](https://github.com/AMXgaming111/dragon-ball-finality/releases)
 [![Discord.js](https://img.shields.io/badge/discord.js-v14.21.0-blue.svg)](https://discord.js.org/)
 [![Node.js](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
@@ -59,6 +59,7 @@ A comprehensive Discord RPG bot for Dragon Ball-themed servers featuring turn-ba
 - `!defend <@user> [e1-5]` - Defend against attack
 - `!turn` - Advance combat turn
 - `!resolve` - Resolve expired attacks (Staff)
+- `!release <percentage>%` - Adjust effective power level percentage
 
 ### Racial Abilities
 - `!race <on/off>` - Toggle passive racial abilities
@@ -145,6 +146,14 @@ A comprehensive Discord RPG bot for Dragon Ball-themed servers featuring turn-ba
 ```
 
 ## 📊 Version History
+
+- **v0.0.4** (2025-08-14) - Release System & Combat Enhancement Updates
+  - **NEW**: Release command for manual effective PL adjustment (`!release x%`)
+  - **ENHANCED**: Maximum multiplier information display for ki attacks, blocks, and dodges
+  - **FIXED**: Arcosian Resilience detection bug causing incorrect effective PL calculations
+  - **IMPROVED**: Turn advancement system with proper SQL queries and error handling
+  - **ADDED**: Database schema expansion with release_percentage column
+  - **OPTIMIZED**: Ki cost calculations with effort level validation and upfront blocking
 
 - **v0.0.3** (2025-08-13) - Major Racial System Overhaul & Combat Fixes
   - **FIXED**: Complete Zenkai system rewrite with proper turn advancement logic

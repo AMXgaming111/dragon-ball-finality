@@ -199,15 +199,15 @@ async function applyEndOfTurnEffects(characterId, database) {
 
     // Check for Zenkai advancement if in combat
     const turnOrder = await database.get(
-        'SELECT * FROM turn_orders WHERE JSON_EXTRACT(participants, "$[*].characterId") LIKE ? AND channel_id IS NOT NULL',
-        [`%${characterId}%`]
+        'SELECT * FROM turn_orders WHERE participants LIKE ? AND channel_id IS NOT NULL',
+        [`%"characterId":${characterId}%`]
     );
 
     if (turnOrder) {
         // Check for Zenkai racial
         const zenkaiRacial = await database.get(
-            'SELECT * FROM character_racials WHERE character_id = ? AND racial_name = ?',
-            [characterId, 'Zenkai']
+            'SELECT * FROM character_racials WHERE character_id = ? AND racial_tag = ?',
+            [characterId, 'zenkai']
         );
 
         if (zenkaiRacial) {

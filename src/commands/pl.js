@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateEffectivePL, calculateHealthPercentage, calculateMaxHealth, calculateMaxKi, getCombatBonuses } = require('../utils/calculations');
+const { calculateEffectivePL, calculateEffectivePLWithRelease, calculateHealthPercentage, calculateMaxHealth, calculateMaxKi, getCombatBonuses } = require('../utils/calculations');
 
 module.exports = {
     name: 'pl',
@@ -31,7 +31,12 @@ module.exports = {
             // Get character racials
             const characterData = await database.getCharacterWithRacials(userData.active_character_id);
             const racials = characterData.racials ? characterData.racials.split(',') : [];
-            const hasArcosianResilience = racials.includes('aresist');
+            
+            // Check for active Arcosian Resilience racial
+            const hasArcosianResilience = await database.get(`
+                SELECT is_active FROM character_racials 
+                WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
+            `, [userData.active_character_id]);
 
             // Get current form if any
             const currentForm = await database.get(
@@ -71,15 +76,24 @@ module.exports = {
             // Get combat bonuses (Zenkai and Majin Magic)
             const combatBonuses = await getCombatBonuses(database, userData.active_character_id, message.channel.id);
 
-            // Calculate effective PL
-            const effectivePL = calculateEffectivePL(
+            // Calculate effective PL with release percentage
+            const effectivePL = await calculateEffectivePLWithRelease(
+                database,
+                userData.active_character_id,
                 userData.base_pl, 
                 kiPercentage, 
                 formMultiplier, 
-                hasArcosianResilience,
+                !!hasArcosianResilience,
                 combatBonuses.zenkaiBonus,
                 combatBonuses.majinMagicBonus
             );
+
+            // Get release percentage for display
+            const releaseData = await database.get(
+                'SELECT release_percentage FROM characters WHERE id = ?',
+                [userData.active_character_id]
+            );
+            const releasePercentage = releaseData?.release_percentage || 100;
 
             // Create embed
             const embed = new EmbedBuilder()
@@ -89,6 +103,7 @@ module.exports = {
                 .addFields(
                     { name: 'Base PL', value: userData.base_pl.toString(), inline: true },
                     { name: 'Effective PL', value: effectivePL.toString(), inline: true },
+                    { name: 'Release Level', value: `${releasePercentage}%`, inline: true },
                     { name: 'Form Multiplier', value: `${formMultiplier}x`, inline: true },
                     { name: 'Health', value: `${Math.round(healthPercentage)}% (${currentHealth}/${maxHealth})`, inline: true },
                     { name: 'Ki', value: `${Math.round(kiPercentage)}% (${currentKi}/${maxKi})`, inline: true },

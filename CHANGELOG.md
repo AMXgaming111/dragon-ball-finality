@@ -1,5 +1,119 @@
 # Changelog
 
+## [0.0.4] - 2025-08-14
+
+### Release System & Combat Enhancement Updates
+
+#### 🆕 New Release System
+- **Manual Power Level Control**
+  - ✅ **NEW**: `!release <percentage>%` command for adjusting effective power level
+  - ✅ **FLEXIBLE**: Supports suppression (`!release 50%`) and power surges (`!release 150%`)
+  - ✅ **INTEGRATED**: Works with all existing mechanics (ki debuffs, bonuses, forms)
+  - ✅ **DATABASE**: Added `release_percentage` column to characters table (defaults to 100%)
+  - ✅ **VISUAL**: Shows both base effective PL and current release level in displays
+
+- **Release System Features**
+  - Release percentage applies as final multiplier after all other calculations
+  - Maintains compatibility with Arcosian Resilience, Zenkai, Majin Magic, and forms
+  - Allows temporary power adjustments for uncoded abilities and forms
+  - Embedded display shows power surge/suppression status with appropriate colors
+
+#### 🔧 Combat System Enhancements
+- **Maximum Multiplier Information**
+  - ✅ **ENHANCED**: Ki attacks now show "Max Affordable Multiplier: X.Xx" based on current ki
+  - ✅ **ENHANCED**: Block defenses show both max additive AND max affordable multiplier
+  - ✅ **ENHANCED**: Dodge defenses show both max additive AND max affordable multiplier
+  - ✅ **INTELLIGENT**: Calculations factor in effort costs, accuracy multipliers, and control stat
+
+- **Upfront Ki Validation**
+  - ✅ **FIXED**: Ki attacks now blocked entirely if insufficient ki for any multiplier
+  - ✅ **IMPROVED**: Shows "No multipliers affordable (insufficient ki)" when applicable
+  - ✅ **ENHANCED**: Prevents failed attack attempts with clear error messages and suggestions
+
+#### 🐛 Critical Bug Fixes
+- **Arcosian Resilience Detection**
+  - ✅ **FIXED**: Major bug where `undefined !== null` returned `true`
+  - ✅ **CORRECTED**: Changed from `hasArcosianResilience !== null` to `!!hasArcosianResilience`
+  - ✅ **STANDARDIZED**: All commands now use consistent boolean conversion
+  - ✅ **IMPACT**: Prevents characters from incorrectly gaining Arcosian Resilience benefits
+
+- **Turn Advancement System**
+  - ✅ **FIXED**: SQL syntax errors in turn order queries (`JSON_EXTRACT` → `LIKE` syntax)
+  - ✅ **FIXED**: Column name corrections (`character_id` → `id` for characters table)
+  - ✅ **ENHANCED**: Proper participant checking with validated database queries
+  - ✅ **IMPROVED**: Better error handling and turn progression logic
+
+#### 🛠️ Technical Improvements
+- **Database Schema Updates**
+  - ✅ **ADDED**: `release_percentage` column to characters table with automatic migration
+  - ✅ **DEFAULT**: New characters start with 100% release (baseline power)
+  - ✅ **VALIDATION**: Proper data type handling (REAL) for percentage values
+
+- **Calculation System Enhancements**
+  - ✅ **NEW**: `calculateMaxAffordableMultiplier()` function for ki cost validation
+  - ✅ **NEW**: `calculateEffectivePLWithRelease()` wrapper for automatic release lookup
+  - ✅ **ENHANCED**: Original `calculateEffectivePL()` supports optional release parameter
+  - ✅ **OPTIMIZED**: Efficient ki cost calculations with proper effort integration
+
+- **Command Integration Updates**
+  - ✅ **UPDATED**: `!pl` command shows release percentage and applies it to effective PL
+  - ✅ **UPDATED**: `!attack` command uses release percentage and shows max multipliers
+  - ✅ **UPDATED**: `!defend` command uses release percentage and shows max multipliers
+  - ✅ **CONSISTENT**: All combat commands now use unified effective PL calculation
+
+#### 📊 User Experience Improvements
+- **Informational Displays**
+  - ✅ **ENHANCED**: Attack selection shows max affordable ki attack multiplier
+  - ✅ **ENHANCED**: Defense selection shows both max additive and max multiplier side-by-side
+  - ✅ **CLEAR**: "No multipliers affordable" message when ki is insufficient
+  - ✅ **HELPFUL**: Suggestions to lower effort or use physical attacks when ki is low
+
+- **Error Prevention**
+  - ✅ **PROACTIVE**: Blocks impossible attacks before they're attempted
+  - ✅ **EDUCATIONAL**: Clear explanations of ki costs and limitations
+  - ✅ **GUIDED**: Effort level suggestions and alternative action recommendations
+
+#### 🎯 Power Level System Integration
+- **Release Command Features**
+  - Displays base effective PL (100% release) vs current effective PL
+  - Shows power surge indicators for releases above 100%
+  - Shows power suppression indicators for releases below 100%
+  - Maintains all existing bonuses and penalties while applying release percentage
+
+- **Combat Integration**
+  - Release percentage affects all attack and defense calculations
+  - Works seamlessly with forms, racial bonuses, and ki debuffs
+  - Provides temporary power adjustment capability for roleplay scenarios
+
+### Updated Components
+- `src/commands/release.js` - NEW: Manual power level adjustment command
+- `src/commands/pl.js` - Enhanced with release percentage display and calculation
+- `src/commands/attack.js` - Added max multiplier display and release integration
+- `src/commands/defend.js` - Added max multiplier display and release integration
+- `src/utils/calculations.js` - New functions for release and max multiplier calculations
+- `helper_functions.js` - Fixed turn advancement SQL errors and logic
+- Database schema - Added release_percentage column with automatic migration
+
+### Migration Notes
+- Database automatically adds `release_percentage` column on first run
+- Existing characters default to 100% release (no gameplay impact)
+- All existing combat mechanics remain unchanged
+- Release system is purely additive and optional
+
+### Bug Fixes Resolved
+- Arcosian Resilience incorrectly applied to non-Arcosian characters
+- Turn advancement failing due to SQL syntax errors
+- Ki attacks allowed when insufficient ki for any multiplier
+- Missing max multiplier information causing failed attack attempts
+- Inconsistent effective PL calculations between commands
+
+### Performance Optimizations
+- Efficient max multiplier calculations with early termination
+- Reduced database queries through caching of release percentages
+- Optimized SQL queries for turn advancement and racial detection
+
+---
+
 ## [0.0.3] - 2025-08-13
 
 ### Major Racial System Overhaul & Combat Fixes

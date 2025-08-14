@@ -48,23 +48,9 @@ module.exports = {
                         [newHealth, attack.target_character_id]
                     );
                     
-                    // Update ki cap based on new health percentage with Human Spirit consideration
-                    const { calculateKiCap } = require('../utils/calculations');
-                    const newKiCap = await calculateKiCap(database, {
-                        id: attack.target_character_id,
-                        base_pl: targetData.base_pl,
-                        endurance: targetData.endurance,
-                        current_health: newHealth
-                    });
-                    
-                    // Don't increase current ki, only limit maximum
-                    const currentKi = targetData.current_ki || targetData.endurance;
-                    const adjustedKi = Math.min(currentKi, newKiCap);
-                    
-                    await database.run(
-                        'UPDATE characters SET current_ki = ? WHERE id = ?',
-                        [adjustedKi, attack.target_character_id]
-                    );
+                    // Update ki cap based on new health percentage - automatically enforce cap
+                    const { enforceKiCap } = require('../utils/calculations');
+                    await enforceKiCap(database, attack.target_character_id);
 
                     // Create result embed for undefended attack
                     const embed = new EmbedBuilder()

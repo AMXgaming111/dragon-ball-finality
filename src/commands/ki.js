@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { parseModifier, applyModifier, calculateMaxKi, generateKiBar, calculateEffectivePL } = require('../utils/calculations');
+const { parseModifier, applyModifier, calculateMaxKi, generateKiBar, calculateEffectivePL, calculateKiCap, hasHumanSpirit } = require('../utils/calculations');
 
 module.exports = {
     name: 'ki',
@@ -121,9 +121,33 @@ module.exports = {
                 );
             }
 
-            // Calculate health percentage to determine ki cap
-            const healthPercentage = Math.max(0, (currentHealth / maxHealth) * 100);
-            const kiCap = Math.floor(maxKi * (healthPercentage / 100));
+            // Calculate ki cap using the standardized function (accounts for Human Spirit racial)
+            // Calculate manually to ensure we use the correct max health
+            const healthPercentage = (currentHealth / maxHealth) * 100;
+            let kiCap;
+            
+            if (healthPercentage >= 100) {
+                kiCap = modifiedEndurance;
+            } else {
+                // Calculate base ki reduction
+                const baseReduction = (100 - healthPercentage) / 100;
+                
+                // Check for Human Spirit racial (halves ki cap reduction)
+                const humanSpirit = await hasHumanSpirit(database, userData.active_character_id);
+                const actualReduction = humanSpirit ? baseReduction * 0.5 : baseReduction;
+                
+                kiCap = Math.round(modifiedEndurance * (1 - actualReduction));
+                kiCap = Math.max(1, kiCap); // Minimum 1 ki cap
+            }
+            
+            // Debug logging to help identify the issue
+            console.log(`Ki Cap Debug for ${userData.name}:`);
+            console.log(`- Base endurance: ${userData.endurance}`);
+            console.log(`- Modified endurance: ${modifiedEndurance}`);
+            console.log(`- Current health: ${currentHealth}`);
+            console.log(`- Max health: ${maxHealth}`);
+            console.log(`- Health percentage: ${Math.round(healthPercentage)}%`);
+            console.log(`- Calculated ki cap: ${kiCap}`);
 
             if (modifierStr) {
                 // Modifying ki - check if it's a percentage
@@ -190,9 +214,10 @@ module.exports = {
 
             // Add health cap info if relevant
             if (healthPercentage < 100) {
+                const kiCapPercentage = Math.round((kiCap / maxKi) * 100);
                 embed.addFields({ 
                     name: 'Health Cap', 
-                    value: `${kiCap}/${maxKi} (${Math.round(healthPercentage)}%)`, 
+                    value: `${kiCap}/${maxKi} (${kiCapPercentage}%)`, 
                     inline: true 
                 });
             }

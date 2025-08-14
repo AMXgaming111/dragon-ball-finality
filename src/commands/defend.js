@@ -1,6 +1,8 @@
 ﻿const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { 
-    calculateEffectivePL, 
+    calculateEffectivePL,
+    calculateEffectivePLWithRelease,
+    calculateMaxAffordableMultiplier,
     calculatePhysicalDefense, 
     calculateKiDefense, 
     calculateAccuracy,
@@ -8,7 +10,8 @@ const {
     getEffortKiCost,
     calculateKiCost,
     calculateKiSpecialCost,
-    getCombatBonuses
+    getCombatBonuses,
+    getCurrentKiCap
 } = require('../utils/calculations');
 const { getPendingAttack, resolveCombat, createCombatResultEmbed, cleanupExpiredAttacks } = require('../utils/combat');
 const { autoManageTurnOrder, advanceTurnFromInteraction, applyEndOfTurnEffects } = require('../../helper_functions');
@@ -87,11 +90,13 @@ module.exports = {
             `, [defenderData.active_character_id]);
             // Get combat bonuses (Zenkai and Majin Magic)
             const combatBonuses = await getCombatBonuses(database, defenderData.active_character_id, message.channel.id);
-            const defenderEffectivePL = calculateEffectivePL(
+            const defenderEffectivePL = await calculateEffectivePLWithRelease(
+                database,
+                defenderData.active_character_id,
                 defenderData.base_pl, 
                 defenderKiPercentage, 
                 1, 
-                hasArcosianResilience !== null,
+                !!hasArcosianResilience,
                 combatBonuses.zenkaiBonus,
                 combatBonuses.majinMagicBonus
             );
@@ -179,10 +184,31 @@ module.exports = {
 };
 
 async function handleBlock(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack) {
+    // Check for Namekian Giant Form bonus for max additive calculation
+    let effectiveStrength = defenderData.strength;
+    const giantForm = await database.get(`
+        SELECT is_active FROM character_racials 
+        WHERE character_id = ? AND racial_tag = 'ngiant' AND is_active = 1
+    `, [defenderData.active_character_id]);
+    
+    if (giantForm) {
+        effectiveStrength += 40; // Giant form grants +40 strength
+    }
+    
+    const maxAdditive = ((effectiveStrength + defenderData.endurance + defenderData.control) / 6).toFixed(2);
+    
+    // Calculate maximum affordable multiplier
+    const defenderCurrentKi = defenderData.current_ki || defenderData.endurance;
+    const maxMultiplier = calculateMaxAffordableMultiplier(defenderCurrentKi, defenderData.control, effort, 1, defenderData.endurance);
+    
     const embed = new EmbedBuilder()
         .setColor(0x95a5a6)
-        .setTitle('ðŸ›¡ï¸ Block Defense')
-        .setDescription('How would you like to modify your block?\n(Enter a number, use * for multiplier, or 0 for basic)\nMultipliers: minimum 1.5, intervals of 0.5 (e.g., 1.5, 2.0, 2.5):');
+        .setTitle('🛡️ Block Defense')
+        .setDescription('How would you like to modify your block?\n(Enter a number, use * for multiplier, or 0 for basic)\nMultipliers: minimum 1.5, intervals of 0.5 (e.g., 1.5, 2.0, 2.5):')
+        .addFields(
+            { name: 'Max Additive', value: `Your maximum additive is **${maxAdditive}**`, inline: true },
+            { name: 'Max Affordable Multiplier', value: maxMultiplier > 0 ? `With your current ki, you can afford up to **${maxMultiplier}x**` : '**No multipliers affordable** (insufficient ki)', inline: true }
+        );
 
     await interaction.update({ embeds: [embed], components: [] });
 
@@ -294,11 +320,13 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     `, [defenderData.active_character_id]);
     // Get combat bonuses (Zenkai and Majin Magic)
     const combatBonuses = await getCombatBonuses(database, defenderData.active_character_id, pendingAttack.channel_id);
-    const updatedEffectivePL = calculateEffectivePL(
+    const updatedEffectivePL = await calculateEffectivePLWithRelease(
+        database,
+        defenderData.active_character_id,
         defenderData.base_pl, 
         updatedKiPercentage, 
         1, 
-        hasArcosianResilience !== null,
+        !!hasArcosianResilience,
         combatBonuses.zenkaiBonus,
         combatBonuses.majinMagicBonus
     );
@@ -319,7 +347,8 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     // Gain ki for basic blocks (after roll)
     if (isBasic) {
         const basicKiGain = Math.floor(defenderData.endurance * 0.05);
-        const finalKi = Math.min(defenderData.endurance, newKi + basicKiGain);
+        const kiCap = await getCurrentKiCap(database, defenderData.active_character_id);
+        const finalKi = Math.min(kiCap, newKi + basicKiGain); // Respect health cap
         await database.run(
             'UPDATE characters SET current_ki = ? WHERE id = ?',
             [finalKi, defenderData.active_character_id]
@@ -344,52 +373,8 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
         });
     }
 
-    // Add turn management footer and buttons
-    combatEmbed.setFooter({ text: 'Would you like to end your turn?' });
-    const turnRow = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('end_turn_yes')
-                .setLabel('Yes')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId('end_turn_no')
-                .setLabel('No')
-                .setStyle(ButtonStyle.Secondary)
-        );
-
-    // Edit the original message with the final combat result and turn buttons
-    const combatMessage = await interaction.editReply({ embeds: [combatEmbed], components: [turnRow] });
-    // Handle turn management button interaction
-    const turnFilter = (buttonInteraction) => {
-        return (buttonInteraction.customId === 'end_turn_yes' || buttonInteraction.customId === 'end_turn_no') && 
-               buttonInteraction.user.id === interaction.user.id;
-    };
-
-    try {
-        const turnInteraction = await combatMessage.awaitMessageComponent({ 
-            filter: turnFilter, 
-            time: 60000 
-        });
-
-        if (turnInteraction.customId === 'end_turn_yes') {
-            // Advance the turn
-            await advanceTurnFromInteraction(turnInteraction, database);
-        } else {
-            // User chose not to end turn
-            await turnInteraction.update({ 
-                embeds: [combatEmbed], 
-                components: [] 
-            });
-        }
-    } catch (error) {
-        // Timeout or error - remove buttons
-        try {
-            await interaction.editReply({ embeds: [combatEmbed], components: [] });
-        } catch (e) {
-            // Ignore edit errors
-        }
-    }
+    // Edit the original message with the final combat result
+    await interaction.editReply({ embeds: [combatEmbed], components: [] });
 
     // Delete the user's modifier input message
     try {
@@ -400,10 +385,31 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
 }
 
 async function handleDodge(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack) {
+    // Check for Namekian Giant Form bonus for max additive calculation
+    let effectiveStrength = defenderData.strength;
+    const giantForm = await database.get(`
+        SELECT is_active FROM character_racials 
+        WHERE character_id = ? AND racial_tag = 'ngiant' AND is_active = 1
+    `, [defenderData.active_character_id]);
+    
+    if (giantForm) {
+        effectiveStrength += 40; // Giant form grants +40 strength
+    }
+    
+    const maxAdditive = ((effectiveStrength + defenderData.endurance + defenderData.control) / 6).toFixed(2);
+    
+    // Calculate maximum affordable multiplier
+    const defenderCurrentKi = defenderData.current_ki || defenderData.endurance;
+    const maxMultiplier = calculateMaxAffordableMultiplier(defenderCurrentKi, defenderData.control, effort, 1, defenderData.endurance);
+    
     const embed = new EmbedBuilder()
         .setColor(0x3498db)
-        .setTitle('ðŸ’¨ Dodge Defense')
-        .setDescription('How would you like to modify your dodge?\n(Enter a number, use * for multiplier, or 0 for basic)\nMultipliers: minimum 1.5, intervals of 0.5 (e.g., 1.5, 2.0, 2.5):');
+        .setTitle('💨 Dodge Defense')
+        .setDescription('How would you like to modify your dodge?\n(Enter a number, use * for multiplier, or 0 for basic)\nMultipliers: minimum 1.5, intervals of 0.5 (e.g., 1.5, 2.0, 2.5):')
+        .addFields(
+            { name: 'Max Additive', value: `Your maximum additive is **${maxAdditive}**`, inline: true },
+            { name: 'Max Affordable Multiplier', value: maxMultiplier > 0 ? `With your current ki, you can afford up to **${maxMultiplier}x**` : '**No multipliers affordable** (insufficient ki)', inline: true }
+        );
 
     await interaction.update({ embeds: [embed], components: [] });
 
@@ -515,11 +521,13 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     `, [defenderData.active_character_id]);
     // Get combat bonuses (Zenkai and Majin Magic)
     const combatBonuses = await getCombatBonuses(database, defenderData.active_character_id, pendingAttack.channel_id);
-    const updatedEffectivePL = calculateEffectivePL(
+    const updatedEffectivePL = await calculateEffectivePLWithRelease(
+        database,
+        defenderData.active_character_id,
         defenderData.base_pl, 
         updatedKiPercentage, 
         1, 
-        hasArcosianResilience2 !== null,
+        !!hasArcosianResilience2,
         combatBonuses.zenkaiBonus,
         combatBonuses.majinMagicBonus
     );
@@ -543,7 +551,8 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     // Gain ki for basic dodges (after roll)
     if (isBasic) {
         const basicKiGain = Math.floor(defenderData.endurance * 0.05);
-        const finalKi = Math.min(defenderData.endurance, newKi + basicKiGain);
+        const kiCap = await getCurrentKiCap(database, defenderData.active_character_id);
+        const finalKi = Math.min(kiCap, newKi + basicKiGain); // Respect health cap
         await database.run(
             'UPDATE characters SET current_ki = ? WHERE id = ?',
             [finalKi, defenderData.active_character_id]
@@ -568,52 +577,8 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         });
     }
 
-    // Add turn management footer and buttons
-    combatEmbed.setFooter({ text: 'Would you like to end your turn?' });
-    const turnRow = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('end_turn_yes')
-                .setLabel('Yes')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId('end_turn_no')
-                .setLabel('No')
-                .setStyle(ButtonStyle.Secondary)
-        );
-
-    // Edit the original message with the final combat result and turn buttons
-    const combatMessage = await interaction.editReply({ embeds: [combatEmbed], components: [turnRow] });
-    // Handle turn management button interaction
-    const turnFilter = (buttonInteraction) => {
-        return (buttonInteraction.customId === 'end_turn_yes' || buttonInteraction.customId === 'end_turn_no') && 
-               buttonInteraction.user.id === interaction.user.id;
-    };
-
-    try {
-        const turnInteraction = await combatMessage.awaitMessageComponent({ 
-            filter: turnFilter, 
-            time: 60000 
-        });
-
-        if (turnInteraction.customId === 'end_turn_yes') {
-            // Advance the turn
-            await advanceTurnFromInteraction(turnInteraction, database);
-        } else {
-            // User chose not to end turn
-            await turnInteraction.update({ 
-                embeds: [combatEmbed], 
-                components: [] 
-            });
-        }
-    } catch (error) {
-        // Timeout or error - remove buttons
-        try {
-            await interaction.editReply({ embeds: [combatEmbed], components: [] });
-        } catch (e) {
-            // Ignore edit errors
-        }
-    }
+    // Edit the original message with the final combat result
+    await interaction.editReply({ embeds: [combatEmbed], components: [] });
 
     // Delete the user's modifier input message
     try {

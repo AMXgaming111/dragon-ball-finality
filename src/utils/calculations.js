@@ -1,12 +1,27 @@
 const { racials } = require('./config');
 
+// Check if // Get current ki cap for a character (helper function)
+async function getCurrentKiCap(database, characterId) {
+    // Get character data directly
+    const character = await database.get(`
+        SELECT id, base_pl, endurance, current_health, current_ki
+        FROM characters 
+        WHERE id = ?
+    `, [characterId]);
+    
+    if (!character) return 1; // Fallback
+    
+    return await calculateKiCap(database, character);
+}
+
 // Check if character has active Human Spirit racial
 async function hasHumanSpirit(database, characterId) {
     const racial = await database.get(`
         SELECT is_active FROM character_racials 
         WHERE character_id = ? AND racial_tag = 'hspirit' AND is_active = 1
     `, [characterId]);
-    return racial !== null;
+    
+    return Boolean(racial); // Explicitly convert to boolean
 }
 
 // Calculate ki cap based on health with Human Spirit consideration
@@ -26,8 +41,47 @@ async function calculateKiCap(database, character) {
     const humanSpirit = await hasHumanSpirit(database, character.id);
     const actualReduction = humanSpirit ? baseReduction * 0.5 : baseReduction;
     
-    const reducedCap = Math.floor(character.endurance * (1 - actualReduction));
+    const reducedCap = Math.round(character.endurance * (1 - actualReduction));
     return Math.max(1, reducedCap); // Minimum 1 ki cap
+}
+
+// Enforce ki cap dynamically when health changes - automatically lowers ki if above cap
+async function enforceKiCap(database, characterId) {
+    // Get character data directly to ensure we have fresh health data
+    const character = await database.get(`
+        SELECT id, base_pl, endurance, current_health, current_ki
+        FROM characters 
+        WHERE id = ?
+    `, [characterId]);
+    
+    if (!character) return;
+    
+    const currentKi = character.current_ki || character.endurance;
+    const kiCap = await calculateKiCap(database, character);
+    
+    // Only reduce ki if it's above the cap - never increase it automatically
+    if (currentKi > kiCap) {
+        await database.run(
+            'UPDATE characters SET current_ki = ? WHERE id = ?',
+            [kiCap, characterId]
+        );
+        console.log(`Ki automatically reduced from ${currentKi} to ${kiCap} due to health cap for character ${characterId}`);
+    }
+}
+
+// Get current ki cap for a character (helper function)
+async function getCurrentKiCap(database, characterId) {
+    // First get the character's user ID
+    const characterData = await database.get(
+        'SELECT owner_id FROM characters WHERE id = ?',
+        [characterId]
+    );
+    if (!characterData) return 100; // Fallback
+    
+    const character = await database.getUserWithActiveCharacter(characterData.owner_id);
+    if (!character || character.active_character_id !== characterId) return 100; // Fallback
+    
+    return await calculateKiCap(database, character);
 }
 
 // Calculate ki loss based on health percentage
@@ -68,7 +122,7 @@ function calculateKiLossFromHealth(healthPercentage) {
 }
 
 // Calculate effective PL based on base PL, ki percentage, and forms
-function calculateEffectivePL(basePL, kiPercentage, formMultiplier = 1, hasArcosianResilience = false, zenkaiBonus = 0, majinMagicBonus = 0) {
+function calculateEffectivePL(basePL, kiPercentage, formMultiplier = 1, hasArcosianResilience = false, zenkaiBonus = 0, majinMagicBonus = 0, releasePercentage = 100) {
     const kiDebuff = calculateKiLossFromHealth(kiPercentage);
     const adjustedDebuff = hasArcosianResilience ? kiDebuff / 2 : kiDebuff;
     
@@ -78,8 +132,61 @@ function calculateEffectivePL(basePL, kiPercentage, formMultiplier = 1, hasArcos
     // Add racial bonuses (both are flat PL amounts)
     const racialAdjustedPL = formAdjustedPL + zenkaiBonus + majinMagicBonus;
     
-    // Apply ki debuff to final PL
-    return Math.floor(racialAdjustedPL * (1 - adjustedDebuff / 100));
+    // Apply ki debuff to get base effective PL
+    const baseEffectivePL = racialAdjustedPL * (1 - adjustedDebuff / 100);
+    
+    // Apply release percentage
+    return Math.floor(baseEffectivePL * (releasePercentage / 100));
+}
+
+// Calculate the maximum multiplier a character can afford with their current ki
+function calculateMaxAffordableMultiplier(currentKi, control, effort = 2, accuracyMultiplier = 1, endurance = 1) {
+    let availableKi = currentKi;
+    
+    // Subtract accuracy multiplier cost if used
+    if (accuracyMultiplier > 1) {
+        const accuracyKiCost = calculateKiSpecialCost(accuracyMultiplier, control);
+        availableKi -= accuracyKiCost;
+    }
+    
+    // Subtract effort cost if applicable
+    const effortKiCost = getEffortKiCost(effort);
+    if (effortKiCost > 0) {
+        const effortCost = Math.floor(endurance * (effortKiCost / 100));
+        availableKi -= effortCost;
+    }
+    
+    // If no ki available, return 0 to indicate no multipliers affordable
+    if (availableKi <= 0) {
+        return 0;
+    }
+    
+    // Find the highest multiplier we can afford
+    let maxMultiplier = 0;
+    for (let mult = 1.5; mult <= 10; mult += 0.5) {
+        const cost = calculateKiSpecialCost(mult, control);
+        if (cost <= availableKi) {
+            maxMultiplier = mult;
+        } else {
+            break;
+        }
+    }
+    
+    // If we can't afford even 1.5x, return 0
+    return maxMultiplier > 0 ? maxMultiplier : 0;
+}
+
+// Calculate effective PL with automatic release percentage lookup
+async function calculateEffectivePLWithRelease(database, characterId, basePL, kiPercentage, formMultiplier = 1, hasArcosianResilience = false, zenkaiBonus = 0, majinMagicBonus = 0) {
+    // Get the character's release percentage
+    const releaseData = await database.get(
+        'SELECT release_percentage FROM characters WHERE id = ?',
+        [characterId]
+    );
+    
+    const releasePercentage = releaseData?.release_percentage || 100;
+    
+    return calculateEffectivePL(basePL, kiPercentage, formMultiplier, hasArcosianResilience, zenkaiBonus, majinMagicBonus, releasePercentage);
 }
 
 // Calculate maximum health based on base PL and endurance
@@ -405,7 +512,10 @@ async function handleMajinMagic(db, characterId, healthPercentageLost, channelId
         const currentKi = character.current_ki || 0;
         const maxKi = character.endurance || 100;
         const kiGainAmount = Math.floor(maxKi * (healthPercentageLost / 100));
-        const newKi = Math.min(maxKi, currentKi + kiGainAmount);
+        
+        // Get current ki cap to respect health limitations
+        const kiCap = await calculateKiCap(db, character);
+        const newKi = Math.min(kiCap, currentKi + kiGainAmount); // Respect health cap
         
         // Calculate PL bonus (percentage of base PL equal to health percentage lost)
         const currentBonus = combatState?.majin_magic_bonus || 0;
@@ -486,6 +596,8 @@ async function getCombatBonuses(db, characterId, channelId = null) {
 module.exports = {
     calculateKiLossFromHealth,
     calculateEffectivePL,
+    calculateEffectivePLWithRelease,
+    calculateMaxAffordableMultiplier,
     calculateMaxHealth,
     calculateMaxKi,
     calculateHealthPercentage,
@@ -509,6 +621,8 @@ module.exports = {
     generateKiBar,
     hasHumanSpirit,
     calculateKiCap,
+    enforceKiCap,
+    getCurrentKiCap,
     handleMajinMagic,
     getCombatBonuses
 };
