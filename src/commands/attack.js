@@ -7,9 +7,11 @@ const {
     rollWithEffort,
     getEffortKiCost,
     calculateKiSpecialCost,
-    calculateBlowback
+    calculateBlowback,
+    getCombatBonuses
 } = require('../utils/calculations');
 const { storePendingAttack, cleanupExpiredAttacks } = require('../utils/combat');
+const { autoManageTurnOrder } = require('../../helper_functions');
 
 module.exports = {
     name: 'attack',
@@ -69,33 +71,21 @@ module.exports = {
                 return message.reply(`${targetUser.username} doesn't have an active character.`);
             }
 
-            // Auto-create turn order if it doesn't exist
-            const existingTurnOrder = await database.get(
-                'SELECT * FROM turn_orders WHERE channel_id = ?',
-                [message.channel.id]
+            // Auto-manage turn order (create or add participants as needed)
+            const turnOrderResult = await autoManageTurnOrder(
+                message.channel.id, 
+                message.author.id, 
+                targetUserId, 
+                message.client, 
+                database
             );
             
-            if (!existingTurnOrder) {
-                // Create turn order with attacker first, defender second
-                const participants = [
-                    {
-                        userId: message.author.id,
-                        characterId: attackerData.active_character_id,
-                        characterName: attackerData.name
-                    },
-                    {
-                        userId: targetUserId,
-                        characterId: targetData.active_character_id,
-                        characterName: targetData.name
-                    }
-                ];
-                
-                await database.run(
-                    'INSERT INTO turn_orders (channel_id, participants, current_turn, current_round) VALUES (?, ?, ?, ?)',
-                    [message.channel.id, JSON.stringify(participants), 0, 1]
-                );
-                
-                await message.channel.send(`⚔️ **Combat initiated!** Turn order created with **${attackerData.name}** first, **${targetData.name}** second.`);
+            if (!turnOrderResult.success) {
+                return message.reply(turnOrderResult.message);
+            }
+            
+            if (turnOrderResult.message) {
+                await message.channel.send(turnOrderResult.message);
             }
 
             // Calculate attacker's effective PL and stats
@@ -107,26 +97,16 @@ module.exports = {
                 WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
             `, [attackerData.active_character_id]);
             
-            // Check for Zenkai bonus
-            let zenkaiBonus = 0;
-            const attackerRacials = await database.getCharacterWithRacials(attackerData.active_character_id);
-            if (attackerRacials.racials && attackerRacials.racials.includes('zenkai')) {
-                const zenkaiState = await database.get(`
-                    SELECT zenkai_bonus FROM combat_state 
-                    WHERE character_id = ? AND channel_id = ?
-                `, [attackerData.active_character_id, message.channel.id]);
-                
-                if (zenkaiState) {
-                    zenkaiBonus = zenkaiState.zenkai_bonus || 0;
-                }
-            }
+            // Get combat bonuses (Zenkai and Majin Magic)
+            const combatBonuses = await getCombatBonuses(database, attackerData.active_character_id, message.channel.id);
             
             const attackerEffectivePL = calculateEffectivePL(
                 attackerData.base_pl, 
                 attackerKiPercentage, 
                 1, 
                 hasArcosianResilience !== null,
-                zenkaiBonus
+                combatBonuses.zenkaiBonus,
+                combatBonuses.majinMagicBonus
             );
 
             // Create attack type selection embed
@@ -245,7 +225,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     const additive = parseFloat(additiveInput) || 0;
 
     // Calculate damage and accuracy
-    const baseDamage = calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, additive);
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, additive, database, attackerData.active_character_id);
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
     
     // Apply effort and accuracy multiplier

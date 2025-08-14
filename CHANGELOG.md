@@ -1,5 +1,80 @@
 # Changelog
 
+## [0.0.3] - 2025-08-13
+
+### Major Racial System Overhaul & Combat Fixes
+
+#### 🧬 Racial Abilities - Complete Rewrite
+- **Zenkai System (Saiyan)**
+  - ✅ **FIXED**: Added missing Zenkai logic to turn advancement system
+  - ✅ **FIXED**: Corrected database column usage (`last_enemy_pl` instead of `last_attacker_pl`)
+  - ✅ **ENHANCED**: Zenkai now properly triggers when attacking stronger opponents
+  - ✅ **IMPROVED**: Added proper channel-based combat state tracking
+  - Zenkai grants 10% base PL bonus per round when hitting stronger enemies
+
+- **Majin Magic System (Majin)**
+  - ✅ **FIXED**: Corrected SQL queries using proper `racial_tag` column
+  - ✅ **FIXED**: Added missing `channel_id` parameter for combat state operations  
+  - ✅ **ENHANCED**: Proper ki gain and PL bonus calculations (up to 50% base PL cap)
+  - ✅ **IMPROVED**: Better error handling and fallback logic
+  - Grants ki and PL boosts equal to damage percentage dealt to enemies
+
+- **Majin Regeneration Standardization**
+  - ✅ **STANDARDIZED**: All files now use consistent 10% basic / 20% enhanced rates
+  - ✅ **FIXED**: Enhanced regeneration now properly costs ki (3 × 100/Control)
+  - ✅ **UPDATED**: Fixed inconsistent values across multiple utility files
+
+- **Namekian Giant Form Implementation**
+  - ✅ **IMPLEMENTED**: Added missing +40 Strength/Defense stat bonuses to damage calculations
+  - ✅ **ENHANCED**: Updated `calculatePhysicalAttack` and `calculatePhysicalDefense` functions
+  - ✅ **FIXED**: Proper ki drain using `calculateKiCost(3, control)` formula
+  - Giant form now provides substantial combat advantages as intended
+
+#### 🛠️ Database & Infrastructure
+- **Combat State Table Enhancements**
+  - ✅ **ADDED**: `last_enemy_pl` column for proper Zenkai tracking
+  - ✅ **IMPROVED**: Better primary key constraints with channel_id
+  - ✅ **MIGRATION**: Automatic database schema updates
+
+- **Power Level Display Fixes**
+  - ✅ **FIXED**: `zenkaiBonus is not defined` error in `!pl` command
+  - ✅ **ENHANCED**: Added Majin Magic bonus display in power level output
+  - ✅ **IMPROVED**: Better combat bonus visualization
+
+#### 🎯 Turn Management System
+- **Turn Order Automation**
+  - ✅ **IMPLEMENTED**: "Would you like to end your turn?" buttons after defense
+  - ✅ **ENHANCED**: Automatic turn order creation when players attack each other
+  - ✅ **IMPROVED**: Seamless combat flow with embedded turn advancement
+
+- **End-of-Turn Effects**
+  - ✅ **STANDARDIZED**: Consistent racial effect application across all files
+  - ✅ **ENHANCED**: Proper channel ID propagation for combat state tracking
+  - ✅ **FIXED**: Missing Zenkai logic in turn.js command
+
+#### 🔧 Code Quality & Maintenance
+- **Function Modernization**
+  - ✅ **UPDATED**: Made damage calculation functions async for database access
+  - ✅ **ENHANCED**: Better parameter passing with database and character ID
+  - ✅ **IMPROVED**: Backward compatibility maintained for existing calls
+
+- **Error Handling**
+  - ✅ **ENHANCED**: Better SQL error messages and debugging
+  - ✅ **IMPROVED**: Graceful fallbacks for missing database parameters
+  - ✅ **ADDED**: Comprehensive logging for racial ability activations
+
+#### 📊 Testing & Validation
+- **Comprehensive Testing Suite**
+  - ✅ **VERIFIED**: All racial abilities working with proper stat bonuses
+  - ✅ **CONFIRMED**: Zenkai accumulation over multiple combat rounds
+  - ✅ **VALIDATED**: Majin Magic ki gain and PL bonus calculations
+  - ✅ **TESTED**: Giant form stat application in damage calculations
+
+### Summary
+Version 0.0.3 represents a major overhaul of the racial ability system, fixing critical bugs that prevented Zenkai and Majin Magic from functioning properly, standardizing Majin Regeneration across all files, and implementing the missing Giant Form stat bonuses. The turn management system has been enhanced with automation features, and the database layer has been improved for better combat state tracking.
+
+---
+
 ## [0.0.2] - 2025-08-10
 
 ### Major System Enhancements & Bug Fixes

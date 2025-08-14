@@ -30,70 +30,6 @@ async function calculateKiCap(database, character) {
     return Math.max(1, reducedCap); // Minimum 1 ki cap
 }
 
-// Handle Zenkai bonus calculation for Saiyans
-async function handleZenkaiBonus(database, attackerCharacterId, targetEffectivePL, channelId) {
-    try {
-        // Check if attacker is a Saiyan with Zenkai
-        const attackerRacials = await database.getCharacterWithRacials(attackerCharacterId);
-        if (!attackerRacials.racials || !attackerRacials.racials.includes('zenkai')) {
-            return; // Not a Saiyan, no Zenkai
-        }
-
-        // Get attacker's data to calculate their effective PL
-        const attackerData = await database.getUserWithActiveCharacter(attackerRacials.owner_id);
-        if (!attackerData) return;
-
-        // Calculate attacker's current effective PL (with existing Zenkai bonuses)
-        const attackerKiPercentage = attackerData.current_ki ? (attackerData.current_ki / attackerData.endurance) * 100 : 100;
-        
-        // Check for existing Zenkai bonus
-        let currentZenkaiBonus = 0;
-        const existingZenkai = await database.get(`
-            SELECT zenkai_bonus FROM combat_state 
-            WHERE character_id = ? AND channel_id = ?
-        `, [attackerCharacterId, channelId]);
-        
-        if (existingZenkai) {
-            currentZenkaiBonus = existingZenkai.zenkai_bonus || 0;
-        }
-
-        // Check for Arcosian Resilience
-        const hasArcosianResilience = await database.get(`
-            SELECT is_active FROM character_racials 
-            WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
-        `, [attackerCharacterId]);
-
-        const attackerEffectivePL = calculateEffectivePL(
-            attackerData.base_pl, 
-            attackerKiPercentage, 
-            1, 
-            hasArcosianResilience !== null,
-            currentZenkaiBonus
-        );
-
-        // Check if target had higher effective PL
-        if (targetEffectivePL > attackerEffectivePL) {
-            // Add 10% Base PL as Zenkai bonus
-            const newZenkaiBonus = currentZenkaiBonus + 10;
-            
-            // Store or update the Zenkai bonus
-            await database.run(`
-                INSERT OR REPLACE INTO combat_state 
-                (character_id, channel_id, zenkai_bonus, last_attacker_pl) 
-                VALUES (?, ?, ?, ?)
-            `, [attackerCharacterId, channelId, newZenkaiBonus, targetEffectivePL]);
-
-            console.log(`Zenkai activated for character ${attackerCharacterId}: ${currentZenkaiBonus}% -> ${newZenkaiBonus}%`);
-            return newZenkaiBonus;
-        }
-        
-        return currentZenkaiBonus;
-    } catch (error) {
-        console.error('Error handling Zenkai bonus:', error);
-        return 0;
-    }
-}
-
 // Calculate ki loss based on health percentage
 function calculateKiLossFromHealth(healthPercentage) {
     if (healthPercentage >= 100) return 0;
@@ -132,18 +68,18 @@ function calculateKiLossFromHealth(healthPercentage) {
 }
 
 // Calculate effective PL based on base PL, ki percentage, and forms
-function calculateEffectivePL(basePL, kiPercentage, formMultiplier = 1, hasArcosianResilience = false, zenkaiBonus = 0) {
+function calculateEffectivePL(basePL, kiPercentage, formMultiplier = 1, hasArcosianResilience = false, zenkaiBonus = 0, majinMagicBonus = 0) {
     const kiDebuff = calculateKiLossFromHealth(kiPercentage);
     const adjustedDebuff = hasArcosianResilience ? kiDebuff / 2 : kiDebuff;
     
     // Apply form multiplier to base PL
     const formAdjustedPL = basePL * formMultiplier;
     
-    // Add Zenkai bonus (flat percentage of base PL)
-    const zenkaiAdjustedPL = formAdjustedPL + (basePL * (zenkaiBonus / 100));
+    // Add racial bonuses (both are flat PL amounts)
+    const racialAdjustedPL = formAdjustedPL + zenkaiBonus + majinMagicBonus;
     
     // Apply ki debuff to final PL
-    return Math.floor(zenkaiAdjustedPL * (1 - adjustedDebuff / 100));
+    return Math.floor(racialAdjustedPL * (1 - adjustedDebuff / 100));
 }
 
 // Calculate maximum health based on base PL and endurance
@@ -188,8 +124,22 @@ function calculateKiSpecialCost(multiplier, control) {
 }
 
 // Calculate physical attack damage
-function calculatePhysicalAttack(effectivePL, strength, additive = 0) {
-    return Math.max(1, Math.floor(effectivePL * ((strength + additive) / 10))); // Ensure minimum damage of 1
+async function calculatePhysicalAttack(effectivePL, strength, additive = 0, database = null, characterId = null) {
+    let finalStrength = strength + additive;
+    
+    // Check for Namekian Giant Form bonus
+    if (database && characterId) {
+        const giantForm = await database.get(`
+            SELECT * FROM character_racials 
+            WHERE character_id = ? AND racial_tag = 'ngiant' AND is_active = 1
+        `, [characterId]);
+        
+        if (giantForm) {
+            finalStrength += 40; // Giant form grants +40 strength
+        }
+    }
+    
+    return Math.max(1, Math.floor(effectivePL * (finalStrength / 10))); // Ensure minimum damage of 1
 }
 
 // Calculate ki attack damage
@@ -207,11 +157,25 @@ function calculateAccuracy(effectivePL, agility, modifier = 0, isMultiplier = fa
 }
 
 // Calculate block value
-function calculateBlock(effectivePL, defense, modifier = 0, isMultiplier = false) {
+async function calculateBlock(effectivePL, defense, modifier = 0, isMultiplier = false, database = null, characterId = null) {
+    let finalDefense = defense;
+    
+    // Check for Namekian Giant Form bonus
+    if (database && characterId) {
+        const giantForm = await database.get(`
+            SELECT * FROM character_racials 
+            WHERE character_id = ? AND racial_tag = 'ngiant' AND is_active = 1
+        `, [characterId]);
+        
+        if (giantForm) {
+            finalDefense += 40; // Giant form grants +40 defense
+        }
+    }
+    
     if (isMultiplier) {
-        return Math.max(1, Math.floor((effectivePL * (defense / 10)) * modifier)); // Ensure minimum block of 1
+        return Math.max(1, Math.floor((effectivePL * (finalDefense / 10)) * modifier)); // Ensure minimum block of 1
     } else {
-        return Math.max(1, Math.floor(effectivePL * ((defense + modifier) / 10))); // Ensure minimum block of 1
+        return Math.max(1, Math.floor(effectivePL * ((finalDefense + modifier) / 10))); // Ensure minimum block of 1
     }
 }
 
@@ -329,8 +293,22 @@ function hasStaffRole(member, staffRoleName = 'Staff') {
 }
 
 // Calculate physical defense (blocking)
-function calculatePhysicalDefense(effectivePL, defense, additive = 0) {
-    return Math.max(1, Math.floor(effectivePL * ((defense + additive) / 10))); // Ensure minimum defense of 1
+async function calculatePhysicalDefense(effectivePL, defense, additive = 0, database = null, characterId = null) {
+    let finalDefense = defense + additive;
+    
+    // Check for Namekian Giant Form bonus
+    if (database && characterId) {
+        const giantForm = await database.get(`
+            SELECT * FROM character_racials 
+            WHERE character_id = ? AND racial_tag = 'ngiant' AND is_active = 1
+        `, [characterId]);
+        
+        if (giantForm) {
+            finalDefense += 40; // Giant form grants +40 defense
+        }
+    }
+    
+    return Math.max(1, Math.floor(effectivePL * (finalDefense / 10))); // Ensure minimum defense of 1
 }
 
 // Calculate ki defense (blocking with ki enhancement)
@@ -389,6 +367,122 @@ function generateKiBar(kiPercentage, emojiId = '1400943268170301561') {
     return kiEmoji.repeat(units) + emptyEmoji.repeat(10 - units);
 }
 
+// Handle Majin Magic racial ability - grants ki and PL for health percentage lost by defender
+async function handleMajinMagic(db, characterId, healthPercentageLost, channelId = null) {
+    try {
+        // Check if character has Majin Magic racial
+        const majinRacial = await db.get(
+            'SELECT * FROM character_racials WHERE character_id = ? AND racial_tag = ?',
+            [characterId, 'mmagic']
+        );
+
+        if (!majinRacial) return;
+
+        // Get character data
+        const character = await db.get(
+            'SELECT * FROM characters WHERE id = ?',
+            [characterId]
+        );
+
+        if (!character) return;
+
+        // Get current combat state
+        let combatState;
+        if (channelId) {
+            combatState = await db.get(
+                'SELECT * FROM combat_state WHERE character_id = ? AND channel_id = ?',
+                [characterId, channelId]
+            );
+        } else {
+            // Fallback to any combat state for the character
+            combatState = await db.get(
+                'SELECT * FROM combat_state WHERE character_id = ? ORDER BY rowid DESC LIMIT 1',
+                [characterId]
+            );
+        }
+
+        // Calculate ki gain (equal to health percentage lost by defender)
+        const currentKi = character.current_ki || 0;
+        const maxKi = character.endurance || 100;
+        const kiGainAmount = Math.floor(maxKi * (healthPercentageLost / 100));
+        const newKi = Math.min(maxKi, currentKi + kiGainAmount);
+        
+        // Calculate PL bonus (percentage of base PL equal to health percentage lost)
+        const currentBonus = combatState?.majin_magic_bonus || 0;
+        const maxBonus = Math.floor(character.base_pl * 0.50); // Max 50% of base PL
+        const plBonusAmount = Math.floor(character.base_pl * (healthPercentageLost / 100));
+        
+        // Ensure we don't exceed the 50% cap
+        const potentialNewBonus = currentBonus + plBonusAmount;
+        const actualBonusGain = Math.min(plBonusAmount, maxBonus - currentBonus);
+        const newBonus = Math.min(maxBonus, potentialNewBonus);
+        
+        // Update ki
+        await db.run(
+            'UPDATE characters SET current_ki = ? WHERE id = ?',
+            [newKi, characterId]
+        );
+
+        // Update or create combat state for PL bonus
+        if (combatState && channelId) {
+            await db.run(
+                'UPDATE combat_state SET majin_magic_bonus = ? WHERE character_id = ? AND channel_id = ?',
+                [newBonus, characterId, channelId]
+            );
+        } else if (channelId) {
+            await db.run(
+                'INSERT INTO combat_state (character_id, channel_id, majin_magic_bonus, zenkai_bonus) VALUES (?, ?, ?, ?)',
+                [characterId, channelId, newBonus, 0]
+            );
+        } else if (combatState) {
+            // Fallback for when no channel_id is provided
+            await db.run(
+                'UPDATE combat_state SET majin_magic_bonus = ? WHERE character_id = ?',
+                [newBonus, characterId]
+            );
+        } else {
+            // Cannot create without channel_id
+            console.warn('Cannot create combat state for Majin Magic without channel_id');
+            return;
+        }
+
+        const kiPercentageGain = ((kiGainAmount / maxKi) * 100).toFixed(1);
+        const plPercentageGain = ((actualBonusGain / character.base_pl) * 100).toFixed(1);
+        
+        console.log(`Majin Magic activated for character ${characterId}: +${kiPercentageGain}% Ki, +${plPercentageGain}% PL bonus`);
+
+    } catch (error) {
+        console.error('Error in handleMajinMagic:', error);
+    }
+}
+
+// Get combat bonuses from database
+async function getCombatBonuses(db, characterId, channelId = null) {
+    try {
+        let query, params;
+        
+        if (channelId) {
+            // Use specific channel if provided
+            query = 'SELECT zenkai_bonus, majin_magic_bonus FROM combat_state WHERE character_id = ? AND channel_id = ?';
+            params = [characterId, channelId];
+        } else {
+            // Fallback to any combat state for the character
+            query = 'SELECT zenkai_bonus, majin_magic_bonus FROM combat_state WHERE character_id = ? ORDER BY rowid DESC LIMIT 1';
+            params = [characterId];
+        }
+        
+        const combatState = await db.get(query, params);
+
+        return {
+            zenkaiBonus: combatState?.zenkai_bonus || 0,
+            majinMagicBonus: combatState?.majin_magic_bonus || 0
+        };
+    } catch (error) {
+        console.error('Error getting combat bonuses:', error);
+        return { zenkaiBonus: 0, majinMagicBonus: 0 };
+    }
+}
+
 module.exports = {
     calculateKiLossFromHealth,
     calculateEffectivePL,
@@ -415,5 +509,6 @@ module.exports = {
     generateKiBar,
     hasHumanSpirit,
     calculateKiCap,
-    handleZenkaiBonus
+    handleMajinMagic,
+    getCombatBonuses
 };

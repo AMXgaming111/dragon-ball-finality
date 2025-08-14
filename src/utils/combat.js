@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateMaxHealth, generateHealthBar, handleZenkaiBonus } = require('./calculations');
+const { calculateMaxHealth, generateHealthBar, handleMajinMagic, getCombatBonuses } = require('./calculations');
 
 /**
  * Store a pending attack in the database
@@ -107,6 +107,16 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
                 [newHealth, pendingAttack.target_character_id]
             );
             
+            // Handle Majin Magic for attacker if damage was dealt
+            if (finalDamage > 0) {
+                try {
+                    const healthPercentageLost = (finalDamage / maxHealth) * 100;
+                    await handleMajinMagic(database, pendingAttack.attacker_character_id, healthPercentageLost, pendingAttack.channel_id);
+                } catch (error) {
+                    console.error('Error handling Majin Magic in combat resolution:', error);
+                }
+            }
+            
             // Update ki cap based on new health percentage with Human Spirit consideration
             const { calculateKiCap } = require('./calculations');
             const newKiCap = await calculateKiCap(database, {
@@ -134,7 +144,7 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
         
         // Handle Zenkai bonus for successful attacks
         try {
-            // Get target's effective PL before the attack
+            // Store the last attacked target's effective PL for Zenkai checking
             const targetData = await database.getUserWithActiveCharacter(pendingAttack.target_user_id);
             if (targetData) {
                 const targetKiPercentage = targetData.current_ki ? (targetData.current_ki / targetData.endurance) * 100 : 100;
@@ -145,19 +155,8 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
                     WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
                 `, [pendingAttack.target_character_id]);
                 
-                // Get target's Zenkai bonus
-                let targetZenkaiBonus = 0;
-                const targetRacials = await database.getCharacterWithRacials(pendingAttack.target_character_id);
-                if (targetRacials.racials && targetRacials.racials.includes('zenkai')) {
-                    const targetZenkaiState = await database.get(`
-                        SELECT zenkai_bonus FROM combat_state 
-                        WHERE character_id = ? AND channel_id = ?
-                    `, [pendingAttack.target_character_id, pendingAttack.channel_id]);
-                    
-                    if (targetZenkaiState) {
-                        targetZenkaiBonus = targetZenkaiState.zenkai_bonus || 0;
-                    }
-                }
+                // Get target's combat bonuses
+                const targetCombatBonuses = await getCombatBonuses(database, pendingAttack.target_character_id, pendingAttack.channel_id);
                 
                 const { calculateEffectivePL } = require('./calculations');
                 const targetEffectivePL = calculateEffectivePL(
@@ -165,23 +164,27 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
                     targetKiPercentage, 
                     1, 
                     targetHasArcosianResilience !== null,
-                    targetZenkaiBonus
+                    targetCombatBonuses.zenkaiBonus,
+                    targetCombatBonuses.majinMagicBonus
                 );
                 
-                // Check for Zenkai bonus for the attacker
-                const zenkaiResult = await handleZenkaiBonus(
-                    database, 
-                    pendingAttack.attacker_character_id, 
-                    targetEffectivePL, 
-                    pendingAttack.channel_id
-                );
+                // Get attacker's current bonuses
+                const attackerCombatBonuses = await getCombatBonuses(database, pendingAttack.attacker_character_id, pendingAttack.channel_id);
                 
-                if (zenkaiResult && zenkaiResult > 0) {
-                    console.log(`Zenkai bonus applied: ${zenkaiResult}%`);
-                }
+                // Store the last attacked target's effective PL for Zenkai checking (happens during end-of-turn)
+                await database.run(
+                    'INSERT OR REPLACE INTO combat_state (character_id, channel_id, zenkai_bonus, majin_magic_bonus, last_enemy_pl) VALUES (?, ?, ?, ?, ?)',
+                    [
+                        pendingAttack.attacker_character_id, 
+                        pendingAttack.channel_id, 
+                        attackerCombatBonuses.zenkaiBonus || 0,
+                        attackerCombatBonuses.majinMagicBonus || 0,
+                        targetEffectivePL
+                    ]
+                );
             }
         } catch (error) {
-            console.error('Error handling Zenkai in combat resolution:', error);
+            console.error('Error storing last attack data for Zenkai:', error);
         }
     }
     

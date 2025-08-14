@@ -1,6 +1,6 @@
 {
   "name": "dragon-ball-finality",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "Discord RPG bot for Dragon Ball Finality server with character creation, combat system, and stat management",
   "main": "index.js",
   "scripts": {

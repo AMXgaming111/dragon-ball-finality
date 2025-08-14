@@ -1,4 +1,4 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+﻿const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { 
     calculateEffectivePL, 
     calculatePhysicalDefense, 
@@ -7,9 +7,11 @@ const {
     rollWithEffort,
     getEffortKiCost,
     calculateKiCost,
-    calculateKiSpecialCost
+    calculateKiSpecialCost,
+    getCombatBonuses
 } = require('../utils/calculations');
 const { getPendingAttack, resolveCombat, createCombatResultEmbed, cleanupExpiredAttacks } = require('../utils/combat');
+const { autoManageTurnOrder, advanceTurnFromInteraction, applyEndOfTurnEffects } = require('../../helper_functions');
 
 module.exports = {
     name: 'defend',
@@ -45,7 +47,6 @@ module.exports = {
         try {
             // Clean up expired attacks
             await cleanupExpiredAttacks(database);
-            
             // Get defender's character
             const defenderData = await database.getUserWithActiveCharacter(message.author.id);
             if (!defenderData || !defenderData.active_character_id) {
@@ -64,41 +65,41 @@ module.exports = {
                 return message.reply(`No pending attack found from ${attackerUser.username}. They need to attack you first!`);
             }
 
+            // Auto-manage turn order (add defender if not already in)
+            const turnOrderResult = await autoManageTurnOrder(
+                message.channel.id, 
+                attackerUserId, 
+                message.author.id, 
+                message.client, 
+                database
+            );
+            
+            if (turnOrderResult.success && turnOrderResult.message) {
+                await message.channel.send(turnOrderResult.message);
+            }
+
             // Calculate defender's effective PL
             const defenderKiPercentage = defenderData.current_ki ? (defenderData.current_ki / defenderData.endurance) * 100 : 100;
-            
             // Check for Arcosian Resilience racial
             const hasArcosianResilience = await database.get(`
                 SELECT is_active FROM character_racials 
                 WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
             `, [defenderData.active_character_id]);
-            
-            // Check for Zenkai bonus
-            let zenkaiBonus = 0;
-            const defenderRacials = await database.getCharacterWithRacials(defenderData.active_character_id);
-            if (defenderRacials.racials && defenderRacials.racials.includes('zenkai')) {
-                const zenkaiState = await database.get(`
-                    SELECT zenkai_bonus FROM combat_state 
-                    WHERE character_id = ? AND channel_id = ?
-                `, [defenderData.active_character_id, message.channel.id]);
-                
-                if (zenkaiState) {
-                    zenkaiBonus = zenkaiState.zenkai_bonus || 0;
-                }
-            }
-            
+            // Get combat bonuses (Zenkai and Majin Magic)
+            const combatBonuses = await getCombatBonuses(database, defenderData.active_character_id, message.channel.id);
             const defenderEffectivePL = calculateEffectivePL(
                 defenderData.base_pl, 
                 defenderKiPercentage, 
                 1, 
                 hasArcosianResilience !== null,
-                zenkaiBonus
+                combatBonuses.zenkaiBonus,
+                combatBonuses.majinMagicBonus
             );
 
             // Create defense type selection embed
             const embed = new EmbedBuilder()
                 .setColor(0x2ecc71)
-                .setTitle('🛡️ How would you like to react?')
+                .setTitle('ðŸ›¡ï¸ How would you like to react?')
                 .setDescription(`**${defenderData.name}** is defending against **${attackerData.name}**`)
                 .addFields(
                     { name: 'Defender', value: `${defenderData.name} (PL: ${defenderEffectivePL})`, inline: true },
@@ -143,7 +144,6 @@ module.exports = {
                 }
 
                 let defenseType = interaction.customId.split('_')[1];
-                
                 if (defenseType === 'magic') {
                     return interaction.reply({
                         content: 'Magic defense is not fully implemented yet.',
@@ -181,7 +181,7 @@ module.exports = {
 async function handleBlock(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack) {
     const embed = new EmbedBuilder()
         .setColor(0x95a5a6)
-        .setTitle('🛡️ Block Defense')
+        .setTitle('ðŸ›¡ï¸ Block Defense')
         .setDescription('How would you like to modify your block?\n(Enter a number, use * for multiplier, or 0 for basic)\nMultipliers: minimum 1.5, intervals of 0.5 (e.g., 1.5, 2.0, 2.5):');
 
     await interaction.update({ embeds: [embed], components: [] });
@@ -197,7 +197,7 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     if (collected.size === 0) {
         const timeoutEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)
-            .setTitle('⏰ Defense Timed Out')
+            .setTitle('â° Defense Timed Out')
             .setDescription('Defense timed out.');
         return interaction.editReply({ embeds: [timeoutEmbed], components: [] });
     }
@@ -222,14 +222,14 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
                 } else {
                     const errorEmbed = new EmbedBuilder()
                         .setColor(0xe74c3c)
-                        .setTitle('❌ Invalid Interval')
+                        .setTitle('âŒ Invalid Interval')
                         .setDescription('Multiplier must be in 0.5 intervals! (e.g., 1.5, 2.0, 2.5, 3.0, etc.)');
                     return interaction.editReply({ embeds: [errorEmbed], components: [] });
                 }
             } else {
                 const errorEmbed = new EmbedBuilder()
                     .setColor(0xe74c3c)
-                    .setTitle('❌ Invalid Multiplier')
+                    .setTitle('âŒ Invalid Multiplier')
                     .setDescription('Multiplier must be at least 1.5!');
                 return interaction.editReply({ embeds: [errorEmbed], components: [] });
             }
@@ -271,14 +271,13 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     if (totalKiCost > currentKi) {
         const errorEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)
-            .setTitle('❌ Insufficient Ki')
+            .setTitle('âŒ Insufficient Ki')
             .setDescription(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
     // Apply ki changes before rolling
     const newKi = Math.max(0, currentKi + kiChange);
-    
     if (kiChange !== 0) {
         await database.run(
             'UPDATE characters SET current_ki = ? WHERE id = ?',
@@ -288,44 +287,30 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
 
     // Calculate updated effective PL after ki loss
     const updatedKiPercentage = (newKi / defenderData.endurance) * 100;
-    
     // Check for Arcosian Resilience racial
     const hasArcosianResilience = await database.get(`
         SELECT is_active FROM character_racials 
         WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
     `, [defenderData.active_character_id]);
-    
-    // Calculate Zenkai bonus for defender
-    let zenkaiBonus = 0;
-    const defenderRacials = await database.getCharacterWithRacials(defenderData.active_character_id);
-    if (defenderRacials.racials && defenderRacials.racials.includes('zenkai')) {
-        const zenkaiState = await database.get(`
-            SELECT zenkai_bonus FROM combat_state 
-            WHERE character_id = ? AND channel_id = ?
-        `, [defenderData.active_character_id, pendingAttack.channel_id]);
-        
-        if (zenkaiState) {
-            zenkaiBonus = zenkaiState.zenkai_bonus || 0;
-        }
-    }
-    
-    // Use the same Zenkai bonus from earlier
+    // Get combat bonuses (Zenkai and Majin Magic)
+    const combatBonuses = await getCombatBonuses(database, defenderData.active_character_id, pendingAttack.channel_id);
     const updatedEffectivePL = calculateEffectivePL(
         defenderData.base_pl, 
         updatedKiPercentage, 
         1, 
         hasArcosianResilience !== null,
-        zenkaiBonus
+        combatBonuses.zenkaiBonus,
+        combatBonuses.majinMagicBonus
     );
 
     // Calculate block value
     let blockValue;
     if (isBasic) {
-        blockValue = calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, 0);
+        blockValue = await calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, 0, database, defenderData.active_character_id);
     } else if (isMultiplier) {
-        blockValue = calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, 0) * modifier;
+        blockValue = await calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, 0, database, defenderData.active_character_id) * modifier;
     } else {
-        blockValue = calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, modifier);
+        blockValue = await calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, modifier, database, defenderData.active_character_id);
     }
 
     // Apply effort to block roll
@@ -344,10 +329,8 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
 
     // Resolve combat
     const combatResult = await resolveCombat(database, pendingAttack, 'block', finalBlockValue);
-    
     // Create combined combat result embed
     const combatEmbed = createCombatResultEmbed(attackerData.name, defenderData.name, combatResult, pendingAttack.attack_type);
-    
     // Add defense details to the same embed
     combatEmbed.addFields(
         { name: 'Block Type', value: isBasic ? 'Basic' : (isMultiplier ? `${modifier}x` : `+${modifier}`), inline: true }
@@ -361,9 +344,53 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
         });
     }
 
-    // Edit the original message with the final combat result
-    await interaction.editReply({ embeds: [combatEmbed], components: [] });
-    
+    // Add turn management footer and buttons
+    combatEmbed.setFooter({ text: 'Would you like to end your turn?' });
+    const turnRow = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('end_turn_yes')
+                .setLabel('Yes')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId('end_turn_no')
+                .setLabel('No')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+    // Edit the original message with the final combat result and turn buttons
+    const combatMessage = await interaction.editReply({ embeds: [combatEmbed], components: [turnRow] });
+    // Handle turn management button interaction
+    const turnFilter = (buttonInteraction) => {
+        return (buttonInteraction.customId === 'end_turn_yes' || buttonInteraction.customId === 'end_turn_no') && 
+               buttonInteraction.user.id === interaction.user.id;
+    };
+
+    try {
+        const turnInteraction = await combatMessage.awaitMessageComponent({ 
+            filter: turnFilter, 
+            time: 60000 
+        });
+
+        if (turnInteraction.customId === 'end_turn_yes') {
+            // Advance the turn
+            await advanceTurnFromInteraction(turnInteraction, database);
+        } else {
+            // User chose not to end turn
+            await turnInteraction.update({ 
+                embeds: [combatEmbed], 
+                components: [] 
+            });
+        }
+    } catch (error) {
+        // Timeout or error - remove buttons
+        try {
+            await interaction.editReply({ embeds: [combatEmbed], components: [] });
+        } catch (e) {
+            // Ignore edit errors
+        }
+    }
+
     // Delete the user's modifier input message
     try {
         await collected.first().delete();
@@ -375,7 +402,7 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
 async function handleDodge(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack) {
     const embed = new EmbedBuilder()
         .setColor(0x3498db)
-        .setTitle('💨 Dodge Defense')
+        .setTitle('ðŸ’¨ Dodge Defense')
         .setDescription('How would you like to modify your dodge?\n(Enter a number, use * for multiplier, or 0 for basic)\nMultipliers: minimum 1.5, intervals of 0.5 (e.g., 1.5, 2.0, 2.5):');
 
     await interaction.update({ embeds: [embed], components: [] });
@@ -391,7 +418,7 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     if (collected.size === 0) {
         const timeoutEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)
-            .setTitle('⏰ Defense Timed Out')
+            .setTitle('â° Defense Timed Out')
             .setDescription('Defense timed out.');
         return interaction.editReply({ embeds: [timeoutEmbed], components: [] });
     }
@@ -416,14 +443,14 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
                 } else {
                     const errorEmbed = new EmbedBuilder()
                         .setColor(0xe74c3c)
-                        .setTitle('❌ Invalid Interval')
+                        .setTitle('âŒ Invalid Interval')
                         .setDescription('Multiplier must be in 0.5 intervals! (e.g., 1.5, 2.0, 2.5, 3.0, etc.)');
                     return interaction.editReply({ embeds: [errorEmbed], components: [] });
                 }
             } else {
                 const errorEmbed = new EmbedBuilder()
                     .setColor(0xe74c3c)
-                    .setTitle('❌ Invalid Multiplier')
+                    .setTitle('âŒ Invalid Multiplier')
                     .setDescription('Multiplier must be at least 1.5!');
                 return interaction.editReply({ embeds: [errorEmbed], components: [] });
             }
@@ -465,14 +492,13 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     if (totalKiCost > currentKi) {
         const errorEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)
-            .setTitle('❌ Insufficient Ki')
+            .setTitle('âŒ Insufficient Ki')
             .setDescription(`Not enough ki! Need ${totalKiCost}, have ${currentKi}.`);
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
     // Apply ki changes before rolling
     const newKi = Math.max(0, currentKi + kiChange);
-    
     if (kiChange !== 0) {
         await database.run(
             'UPDATE characters SET current_ki = ? WHERE id = ?',
@@ -482,34 +508,20 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
 
     // Calculate updated effective PL after ki loss
     const updatedKiPercentage = (newKi / defenderData.endurance) * 100;
-    
     // Check for Arcosian Resilience racial (recheck since this might be a different function)
     const hasArcosianResilience2 = await database.get(`
         SELECT is_active FROM character_racials 
         WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
     `, [defenderData.active_character_id]);
-    
-    // Calculate Zenkai bonus for defender
-    let zenkaiBonus = 0;
-    const defenderRacials = await database.getCharacterWithRacials(defenderData.active_character_id);
-    if (defenderRacials.racials && defenderRacials.racials.includes('zenkai')) {
-        const zenkaiState = await database.get(`
-            SELECT zenkai_bonus FROM combat_state 
-            WHERE character_id = ? AND channel_id = ?
-        `, [defenderData.active_character_id, pendingAttack.channel_id]);
-        
-        if (zenkaiState) {
-            zenkaiBonus = zenkaiState.zenkai_bonus || 0;
-        }
-    }
-    
-    // Use the same Zenkai bonus from earlier
+    // Get combat bonuses (Zenkai and Majin Magic)
+    const combatBonuses = await getCombatBonuses(database, defenderData.active_character_id, pendingAttack.channel_id);
     const updatedEffectivePL = calculateEffectivePL(
         defenderData.base_pl, 
         updatedKiPercentage, 
         1, 
         hasArcosianResilience2 !== null,
-        zenkaiBonus
+        combatBonuses.zenkaiBonus,
+        combatBonuses.majinMagicBonus
     );
 
     // Calculate dodge value
@@ -526,7 +538,7 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     const finalDodgeValue = rollWithEffort(dodgeValue, effort);
 
     // For dodge, we also need the defender's defense stat for potential failed dodge pity block
-    const defenseValue = calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, 0);
+    const defenseValue = await calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, 0, database, defenderData.active_character_id);
 
     // Gain ki for basic dodges (after roll)
     if (isBasic) {
@@ -541,10 +553,8 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
 
     // Resolve combat with dodge
     const combatResult = await resolveCombat(database, pendingAttack, 'dodge', defenseValue, finalDodgeValue);
-    
     // Create combined combat result embed
     const combatEmbed = createCombatResultEmbed(attackerData.name, defenderData.name, combatResult, pendingAttack.attack_type);
-    
     // Add defense details to the same embed
     combatEmbed.addFields(
         { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `${modifier}x` : `+${modifier}`), inline: true }
@@ -558,9 +568,53 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         });
     }
 
-    // Edit the original message with the final combat result
-    await interaction.editReply({ embeds: [combatEmbed], components: [] });
-    
+    // Add turn management footer and buttons
+    combatEmbed.setFooter({ text: 'Would you like to end your turn?' });
+    const turnRow = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('end_turn_yes')
+                .setLabel('Yes')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId('end_turn_no')
+                .setLabel('No')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+    // Edit the original message with the final combat result and turn buttons
+    const combatMessage = await interaction.editReply({ embeds: [combatEmbed], components: [turnRow] });
+    // Handle turn management button interaction
+    const turnFilter = (buttonInteraction) => {
+        return (buttonInteraction.customId === 'end_turn_yes' || buttonInteraction.customId === 'end_turn_no') && 
+               buttonInteraction.user.id === interaction.user.id;
+    };
+
+    try {
+        const turnInteraction = await combatMessage.awaitMessageComponent({ 
+            filter: turnFilter, 
+            time: 60000 
+        });
+
+        if (turnInteraction.customId === 'end_turn_yes') {
+            // Advance the turn
+            await advanceTurnFromInteraction(turnInteraction, database);
+        } else {
+            // User chose not to end turn
+            await turnInteraction.update({ 
+                embeds: [combatEmbed], 
+                components: [] 
+            });
+        }
+    } catch (error) {
+        // Timeout or error - remove buttons
+        try {
+            await interaction.editReply({ embeds: [combatEmbed], components: [] });
+        } catch (e) {
+            // Ignore edit errors
+        }
+    }
+
     // Delete the user's modifier input message
     try {
         await collected.first().delete();
@@ -568,3 +622,4 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         // Might not have permission to delete
     }
 }
+

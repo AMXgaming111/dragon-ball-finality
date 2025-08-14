@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateEffectivePL, calculateHealthPercentage, calculateMaxHealth, calculateMaxKi } = require('../utils/calculations');
+const { calculateEffectivePL, calculateHealthPercentage, calculateMaxHealth, calculateMaxKi, getCombatBonuses } = require('../utils/calculations');
 
 module.exports = {
     name: 'pl',
@@ -68,18 +68,8 @@ module.exports = {
             const healthPercentage = calculateHealthPercentage(currentHealth, maxHealth);
             const kiPercentage = calculateHealthPercentage(currentKi, maxKi);
 
-            // Check for Zenkai bonus
-            let zenkaiBonus = 0;
-            if (racials.includes('zenkai')) {
-                const zenkaiState = await database.get(`
-                    SELECT zenkai_bonus FROM combat_state 
-                    WHERE character_id = ? AND channel_id = ?
-                `, [userData.active_character_id, message.channel.id]);
-                
-                if (zenkaiState) {
-                    zenkaiBonus = zenkaiState.zenkai_bonus || 0;
-                }
-            }
+            // Get combat bonuses (Zenkai and Majin Magic)
+            const combatBonuses = await getCombatBonuses(database, userData.active_character_id, message.channel.id);
 
             // Calculate effective PL
             const effectivePL = calculateEffectivePL(
@@ -87,7 +77,8 @@ module.exports = {
                 kiPercentage, 
                 formMultiplier, 
                 hasArcosianResilience,
-                zenkaiBonus
+                combatBonuses.zenkaiBonus,
+                combatBonuses.majinMagicBonus
             );
 
             // Create embed
@@ -107,10 +98,19 @@ module.exports = {
                 .setTimestamp();
 
             // Add Zenkai bonus if active
-            if (zenkaiBonus > 0) {
+            if (combatBonuses.zenkaiBonus > 0) {
                 embed.addFields({ 
                     name: 'Zenkai Boost', 
-                    value: `+${zenkaiBonus}% PL`, 
+                    value: `+${combatBonuses.zenkaiBonus} PL`, 
+                    inline: true 
+                });
+            }
+
+            // Add Majin Magic bonus if active
+            if (combatBonuses.majinMagicBonus > 0) {
+                embed.addFields({ 
+                    name: 'Majin Magic Boost', 
+                    value: `+${combatBonuses.majinMagicBonus} PL`, 
                     inline: true 
                 });
             }

@@ -239,7 +239,7 @@ async function advanceTurn(message, database) {
 
     // Apply end-of-turn effects for current character
     const currentParticipant = participants[currentTurn];
-    await applyEndOfTurnEffects(currentParticipant.characterId, database);
+    await applyEndOfTurnEffects(currentParticipant.characterId, database, message.channel.id);
 
     // Advance turn
     currentTurn++;
@@ -342,13 +342,27 @@ async function endTurnOrder(message, database) {
         return message.reply('No turn order exists in this channel.');
     }
 
+    // Clear Majin Magic and Zenkai bonuses for all participants since combat is ending
+    try {
+        const participants = JSON.parse(turnOrder.participants);
+        for (const participant of participants) {
+            await database.run(
+                'UPDATE combat_state SET majin_magic_bonus = 0, zenkai_bonus = 0 WHERE character_id = ? AND channel_id = ?',
+                [participant.characterId, channelId]
+            );
+        }
+        console.log('Cleared Majin Magic and Zenkai bonuses for all participants');
+    } catch (error) {
+        console.error('Error clearing combat bonuses:', error);
+    }
+
     // Delete turn order
     await database.run('DELETE FROM turn_orders WHERE channel_id = ?', [channelId]);
 
     const embed = new EmbedBuilder()
         .setColor(0x95a5a6)
         .setTitle('🏁 Combat Ended')
-        .setDescription('Turn order has been ended.');
+        .setDescription('Turn order has been ended.\n*Majin Magic and Zenkai bonuses have been cleared.*');
 
     await message.reply({ embeds: [embed] });
 }
@@ -398,7 +412,7 @@ async function transferTurnOrder(message, channelMention, database) {
     await message.reply({ embeds: [embed] });
 }
 
-async function applyEndOfTurnEffects(characterId, database) {
+async function applyEndOfTurnEffects(characterId, database, channelId) {
     // Get character with racials and forms
     const character = await database.get(`
         SELECT c.*, 
@@ -407,7 +421,7 @@ async function applyEndOfTurnEffects(characterId, database) {
                f.ki_drain, f.health_drain, f.strength_modifier, f.defense_modifier, 
                f.agility_modifier, f.endurance_modifier, f.control_modifier, f.pl_modifier
         FROM characters c
-        LEFT JOIN character_racials cr ON c.id = cr.character_id
+        LEFT JOIN character_racials cr ON c.id = cr.character_id AND cr.is_active = 1
         LEFT JOIN character_forms cf ON c.id = cf.character_id AND cf.is_active = 1
         LEFT JOIN forms f ON cf.form_key = f.form_key
         WHERE c.id = ?
@@ -447,10 +461,66 @@ async function applyEndOfTurnEffects(characterId, database) {
         }
     }
 
-    // Zenkai - handled in combat state updates when dealing damage
+    // Zenkai - check if character faced a stronger enemy and apply bonus
     if (racials.includes('zenkai')) {
-        // Zenkai effect is applied when attacking/dealing damage, not on turn advancement
-        // The bonus is stored in combat_state table and applied to PL calculations
+        try {
+            // Get combat state to check if last enemy was stronger
+            const combatState = await database.get(
+                'SELECT * FROM combat_state WHERE character_id = ? AND channel_id = ?',
+                [characterId, channelId]
+            );
+
+            if (combatState && combatState.last_enemy_pl) {
+                // Calculate character's current effective PL
+                const currentKi = character.current_ki || character.endurance;
+                const kiPercentage = (currentKi / character.endurance) * 100;
+                
+                // Check for form multiplier
+                let formMultiplier = 1;
+                if (character.pl_modifier) {
+                    const plModStr = character.pl_modifier.toString();
+                    if (plModStr.startsWith('*')) {
+                        formMultiplier = parseFloat(plModStr.slice(1)) || 1;
+                    }
+                }
+                
+                // Check for Arcosian Resilience
+                const hasArcosianResilience = await database.get(`
+                    SELECT is_active FROM character_racials 
+                    WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
+                `, [characterId]);
+
+                // Get current combat bonuses
+                const { getCombatBonuses, calculateEffectivePL } = require('../utils/calculations');
+                const bonuses = await getCombatBonuses(database, characterId, channelId);
+
+                const charEffectivePL = calculateEffectivePL(
+                    character.base_pl,
+                    kiPercentage,
+                    formMultiplier,
+                    hasArcosianResilience !== null,
+                    bonuses.zenkaiBonus,
+                    bonuses.majinMagicBonus
+                );
+
+                // Check if the last enemy hit had higher effective PL than the character
+                if (combatState.last_enemy_pl > charEffectivePL) {
+                    // Apply 10% base PL bonus
+                    const zenkaiGain = Math.floor(character.base_pl * 0.10);
+                    const newZenkaiBonus = (bonuses.zenkaiBonus || 0) + zenkaiGain;
+                    
+                    // Update combat state
+                    await database.run(
+                        'UPDATE combat_state SET zenkai_bonus = ? WHERE character_id = ? AND channel_id = ?',
+                        [newZenkaiBonus, characterId, channelId]
+                    );
+
+                    console.log(`Zenkai activated for character ${characterId}: +${zenkaiGain} PL (Total Zenkai: ${newZenkaiBonus})`);
+                }
+            }
+        } catch (error) {
+            console.error('Error applying Zenkai bonus:', error);
+        }
     }
 
     // Giant Form handling for Namekians
