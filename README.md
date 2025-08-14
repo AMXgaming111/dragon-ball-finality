@@ -1,6 +1,6 @@
 # 🐉 Shenron Discord Bot
 
-[![Version](https://img.shields.io/badge/version-0.0.2-orange.svg)](https://github.com/AMXgaming111/dragon-ball-finality/releases)
+[![Version](https://img.shields.io/badge/version-0.0.3-orange.svg)](https://github.com/AMXgaming111/dragon-ball-finality/releases)
 [![Discord.js](https://img.shields.io/badge/discord.js-v14.21.0-blue.svg)](https://discord.js.org/)
 [![Node.js](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
@@ -145,6 +145,16 @@ A comprehensive Discord RPG bot for Dragon Ball-themed servers featuring turn-ba
 ```
 
 ## 📊 Version History
+
+- **v0.0.3** (2025-08-13) - Major Racial System Overhaul & Combat Fixes
+  - **FIXED**: Complete Zenkai system rewrite with proper turn advancement logic
+  - **FIXED**: Majin Magic SQL errors and missing channel_id parameters
+  - **IMPLEMENTED**: Missing Namekian Giant Form stat bonuses (+40 Str/Def)
+  - **STANDARDIZED**: Majin Regeneration rates (10% basic, 20% enhanced) across all files
+  - **ENHANCED**: Turn management with "Would you like to end your turn?" buttons
+  - **ADDED**: Automatic turn order creation when players attack each other
+  - **IMPROVED**: Database schema with `last_enemy_pl` column for Zenkai tracking
+  - **FIXED**: Power level display errors and undefined variable issues
 
 - **v0.0.2** (2025-08-10) - Combat System Enhancements & UI Improvements
   - Fixed Zenkai system integration across all combat commands
