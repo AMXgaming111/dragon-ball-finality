@@ -5,6 +5,7 @@ require('dotenv').config();
 
 const Database = require('./src/database/database');
 const { prefix } = require('./src/utils/config');
+const { isServerAuthorized, handleUnauthorizedServer } = require('./src/utils/serverSecurity');
 
 // Create Discord client
 const client = new Client({
@@ -50,6 +51,18 @@ client.on('messageCreate', async message => {
     // Ignore bot messages and messages without prefix
     if (message.author.bot || !message.content.startsWith(prefix)) return;
 
+    // Check if server is authorized (skip check for DMs)
+    if (message.guild && !isServerAuthorized(message.guild.id)) {
+        // Only respond to serverauth command for unauthorized servers
+        const args = message.content.slice(prefix.length).trim().split(/ +/);
+        const commandName = args.shift().toLowerCase();
+        
+        if (commandName !== 'serverauth') {
+            // Silently ignore other commands in unauthorized servers
+            return;
+        }
+    }
+
     const args = message.content.slice(prefix.length).trim().split(/ +/);
     const commandName = args.shift().toLowerCase();
 
@@ -74,6 +87,24 @@ client.on('interactionCreate', async interaction => {
     }
     
     // Handle other interaction types as needed
+});
+
+// Server security - check when bot joins a new server
+client.on('guildCreate', async (guild) => {
+    console.log(`🏰 Joined server: ${guild.name} (${guild.id}) - ${guild.memberCount} members`);
+    
+    // Check if server is authorized
+    if (!isServerAuthorized(guild.id)) {
+        console.log(`🚫 Server ${guild.name} is not authorized`);
+        await handleUnauthorizedServer(guild, client);
+    } else {
+        console.log(`✅ Server ${guild.name} is authorized`);
+    }
+});
+
+// Log when bot leaves a server
+client.on('guildDelete', (guild) => {
+    console.log(`👋 Left server: ${guild.name} (${guild.id})`);
 });
 
 // Error handling

@@ -232,6 +232,12 @@ module.exports = {
                             description: 'Manually resolve expired attacks (Staff only)',
                             examples: ['!resolve'],
                             aliases: []
+                        },
+                        'serverauth': {
+                            usage: '!serverauth <add/remove/list/check> [server_id]',
+                            description: 'Manage server authorization whitelist (Staff only)',
+                            examples: ['!serverauth check', '!serverauth add 1234567890', '!serverauth list'],
+                            aliases: []
                         }
                     }
                 }
