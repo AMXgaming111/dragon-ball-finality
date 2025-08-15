@@ -51,9 +51,15 @@ module.exports = {
     // Magic affinities
     magicAffinities: [
         'Fire', 'Water', 'Lightning', 'Plant', 'Air', 'Earth', 'Ice', 
-        'Light', 'Negative Energy', 'Gravity', 'Illusion', 'Sealing', 
+        'Light', 'Negative', 'Gravity', 'Illusion', 'Sealing', 
         'Biomancy', 'Time', 'Space', 'Necromancy', 'Telepathy'
     ],
+    
+    // Magic affinity display names (for stats display)
+    magicAffinityDisplayNames: {
+        'Negative': 'Negative Energy'
+        // Add other mappings here if needed in the future
+    },
     
     // Health bar emoji ID
     healthBarEmojiId: '1400942686495572041',

@@ -4,14 +4,40 @@ const { getRacialForRace } = require('../utils/calculations');
 
 module.exports = {
     name: 'cc',
-    description: 'Create a character with a name and race',
+    description: 'Create a character with a name and race. Use quotes for names with spaces: !cc "Name Here" race',
     async execute(message, args, database) {
         if (args.length < 2) {
-            return message.reply('Usage: `!cc <name> <race>`\nAvailable races: ' + races.join(', '));
+            return message.reply('Usage: `!cc "<name>" <race>` or `!cc <name> <race>`\nAvailable races: ' + races.join(', '));
         }
 
-        const characterName = args[0];
-        const raceName = args.slice(1).join(' ');
+        let characterName;
+        let raceName;
+
+        // Check if the first argument starts with a quote
+        if (args[0].startsWith('"')) {
+            // Find the closing quote
+            const fullCommand = args.join(' ');
+            const firstQuote = fullCommand.indexOf('"');
+            const secondQuote = fullCommand.indexOf('"', firstQuote + 1);
+            
+            if (secondQuote === -1) {
+                return message.reply('Missing closing quote! Usage: `!cc "<name>" <race>`\nExample: `!cc "Kazurai Sakada" saiyan`');
+            }
+            
+            // Extract name between quotes
+            characterName = fullCommand.substring(firstQuote + 1, secondQuote);
+            
+            // Extract race after the closing quote
+            raceName = fullCommand.substring(secondQuote + 1).trim();
+            
+            if (!characterName || !raceName) {
+                return message.reply('Invalid format! Usage: `!cc "<name>" <race>`\nExample: `!cc "Kazurai Sakada" saiyan`');
+            }
+        } else {
+            // Original behavior for names without quotes
+            characterName = args[0];
+            raceName = args.slice(1).join(' ');
+        }
 
         // Case-insensitive race matching
         const validRace = races.find(race => race.toLowerCase() === raceName.toLowerCase());

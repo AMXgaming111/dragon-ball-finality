@@ -1,5 +1,128 @@
 # Changelog
 
+## [0.0.5] - 2025-08-15
+
+### Command Enhancement & Magic System Implementation
+
+#### 🎯 Enhanced Command Parsing System
+- **Quoted Name Support**
+  - ✅ **NEW**: All character commands now support quoted names for spaces
+  - ✅ **COMMANDS**: `!cc "Name Here" race`, `!dc "Name Here"`, `!sw "Name Here"`, `!addstats pic "Name Here" url`
+  - ✅ **BACKWARDS COMPATIBLE**: Original single-word names still work without quotes
+
+#### ⚔️ Standardized Attack/Defense Modifier System
+- **Unified Syntax**
+  - ✅ **STANDARDIZED**: `+<number>` for additive modifiers, `*<number>` for multipliers
+  - ✅ **VALIDATION**: Enhanced input validation with clear error messages
+  - ✅ **GUIDANCE**: Max affordable multiplier displays for ki attacks and defenses
+
+- **Enhanced User Experience**
+  - ✅ **CLEAR PROMPTS**: Better descriptions and examples in all combat commands
+  - ✅ **ERROR HANDLING**: Specific error messages for invalid modifier types
+  - ✅ **VISUAL FEEDBACK**: Improved format consistency across all commands
+
+#### ✨ Magic Attack/Defense Implementation
+- **Complete Magic System**
+  - ✅ **NEW**: Full magic attack implementation with affinity-based ki costs
+  - ✅ **NEW**: Magic defense system with primary/secondary affinity support
+  - ✅ **FORMULAS**: Primary (base × 100/control), Secondary (base × 100/control × 2)
+
+- **Magic Integration**
+  - ✅ **COMBAT FLOW**: Seamless integration with existing attack/defend commands
+  - ✅ **KI MANAGEMENT**: Proper ki cost validation and application
+  - ✅ **USER INTERFACE**: Interactive magic spell casting system
+
+#### 📊 Ki Display Enhancement System
+- **Visual Ki Tracking**
+  - ✅ **NEW**: Real-time ki bars in all combat embeds
+  - ✅ **INTEGRATION**: Ki displays added to attack, defend, and magic commands
+  - ✅ **DYNAMIC**: Shows current/max ki with percentage and visual bar
+
+#### 🔮 Magic Affinity System Improvements
+- **Display Name Mapping**
+  - ✅ **UPDATED**: "Negative Energy" displays as "Negative Energy" but stores as "Negative"
+  - ✅ **COMPATIBILITY**: Database migration support for existing affinities
+  - ✅ **CONSISTENCY**: Unified display across stats and saffinity commands
+
+#### 👑 New Staff Commands
+- **Heal Command**
+  - ✅ **NEW**: `!heal @user` - Restore character health and ki to 100%
+  - ✅ **FORM AWARE**: Respects active form modifiers for max calculations
+  - ✅ **DETAILED FEEDBACK**: Shows character, form, and final values
+
+- **Bulk Stat Modification**
+  - ✅ **NEW**: `!saddall @user <operation> <value>` - Modify all stats at once
+  - ✅ **OPERATIONS**: Supports +, -, *, /, and set operations
+  - ✅ **SMART HANDLING**: Automatic health/ki pool updates for endurance changes
+
+#### ⚖️ Ki Debuff System Overhaul
+- **New 3-Tier System**
+  - ✅ **TIER 1**: 100%-50% health: 0.5% debuff per point (25% max)
+  - ✅ **TIER 2**: 49%-20% health: 1.0% debuff per point (30% additional, 55% total)
+  - ✅ **TIER 3**: 19%-0% health: 1.5% debuff per point (30% additional, 85% total)
+
+- **Balanced Progression**
+  - ✅ **SIMPLIFIED**: Cleaner tier structure with exact target percentages
+  - ✅ **OPTIMIZED**: Reduced maximum debuff from 87.5% to 85%
+  - ✅ **COMPATIBLE**: Maintains Arcosian Resilience integration
+
+#### 🐛 Critical Bug Fixes
+- **Health System**
+  - ✅ **FIXED**: Health regeneration now properly caps at maximum health
+  - ✅ **FIXED**: Turn-based healing effects respect health limits
+
+- **Interaction Handling**
+  - ✅ **ADDED**: Missing interaction event handler in main bot file
+  - ✅ **IMPROVED**: Better button interaction processing
+
+- **Character Encoding**
+  - ✅ **FIXED**: Unicode character display issues in combat embeds
+  - ✅ **STANDARDIZED**: Consistent emoji usage across all commands
+
+#### 🛠️ Technical Improvements
+- **Code Quality**
+  - ✅ **REFACTORED**: Unified modifier parsing across all combat commands
+  - ✅ **ENHANCED**: Better error handling and user feedback
+  - ✅ **OPTIMIZED**: Reduced code duplication in attack/defense systems
+
+- **Documentation**
+  - ✅ **ADDED**: Comprehensive command documentation files
+  - ✅ **UPDATED**: Usage examples and feature descriptions
+
+### Updated Components
+- `src/commands/attack.js` - Standardized modifier system, magic attack implementation
+- `src/commands/defend.js` - Enhanced defense options, magic defense system  
+- `src/commands/cc.js` - Added quoted name support
+- `src/commands/dc.js` - Added quoted name support
+- `src/commands/sw.js` - Added quoted name support
+- `src/commands/addstats.js` - Enhanced parsing for quoted names
+- `src/commands/stats.js` - Magic affinity display improvements
+- `src/commands/saffinity.js` - Display name mapping integration
+- `src/commands/say.js` - Improved message handling
+- `src/commands/turn.js` - Health cap fixes for regeneration
+- `src/commands/heal.js` - NEW: Staff healing command
+- `src/commands/saddall.js` - NEW: Bulk stat modification command
+- `src/commands/help.js` - Enhanced interactive help system
+- `src/utils/calculations.js` - New ki debuff system implementation
+- `src/utils/combat.js` - Ki display integration
+- `src/utils/config.js` - Magic affinity display name mapping
+- `index.js` - Added interaction event handler
+- `temp_functions.js` - Health cap fixes
+
+### Migration Notes
+- Characters with "Negative Energy" affinity will display as "Negative Energy" but store as "Negative"
+- New ki debuff system applies immediately - no data migration required
+- All existing commands maintain backwards compatibility
+- New magic system is fully integrated and ready for use
+
+### Performance Optimizations
+- Streamlined modifier parsing reduces command processing time
+- Enhanced ki cost calculations with better validation
+- Improved database queries for affinity handling
+- Optimized interaction event processing
+
+---
+
 ## [0.0.4] - 2025-08-14
 
 ### Release System & Combat Enhancement Updates

@@ -65,6 +65,17 @@ client.on('messageCreate', async message => {
     }
 });
 
+client.on('interactionCreate', async interaction => {
+    // Handle button interactions (like help menu buttons)
+    if (interaction.isButton()) {
+        // The help command handles its own button interactions via collectors
+        // This is mainly for future slash commands or other interactions
+        return;
+    }
+    
+    // Handle other interaction types as needed
+});
+
 // Error handling
 client.on('error', error => {
     console.error('Discord client error:', error);

@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateMaxHealth, generateHealthBar, handleMajinMagic, getCombatBonuses } = require('./calculations');
+const { calculateMaxHealth, generateHealthBar, generateKiBar, handleMajinMagic, getCombatBonuses } = require('./calculations');
 
 /**
  * Store a pending attack in the database
@@ -238,10 +238,28 @@ function createCombatResultEmbed(attackerName, targetName, combatResult, attackT
     return embed;
 }
 
+/**
+ * Add ki bar display to combat embed
+ */
+function addKiDisplay(embed, characterName, currentKi, maxKi) {
+    const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
+    const clampedPercentage = Math.max(0, Math.min(120, kiPercentage));
+    const kiBar = generateKiBar(clampedPercentage, '1400943268170301561');
+    
+    embed.addFields({
+        name: `${characterName}'s Ki`,
+        value: `${kiBar}\n${currentKi}/${maxKi} (${Math.round(clampedPercentage)}%)`,
+        inline: false
+    });
+    
+    return embed;
+}
+
 module.exports = {
     storePendingAttack,
     getPendingAttack,
     cleanupExpiredAttacks,
     resolveCombat,
-    createCombatResultEmbed
+    createCombatResultEmbed,
+    addKiDisplay
 };

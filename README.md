@@ -1,6 +1,6 @@
 # 🐉 Shenron Discord Bot
 
-[![Version](https://img.shields.io/badge/version-0.0.4-orange.svg)](https://github.com/AMXgaming111/dragon-ball-finality/releases)
+[![Version](https://img.shields.io/badge/version-0.0.5-orange.svg)](https://github.com/AMXgaming111/dragon-ball-finality/releases)
 [![Discord.js](https://img.shields.io/badge/discord.js-v14.21.0-blue.svg)](https://discord.js.org/)
 [![Node.js](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
@@ -146,6 +146,16 @@ A comprehensive Discord RPG bot for Dragon Ball-themed servers featuring turn-ba
 ```
 
 ## 📊 Version History
+
+- **v0.0.5** (2025-08-15) - Command Enhancement & Magic System Implementation
+  - **NEW**: Quoted name support for all character commands (`"Name Here"`)
+  - **NEW**: Complete magic attack/defense system with affinity-based ki costs
+  - **NEW**: Staff commands: `!heal` and `!saddall` for character management
+  - **ENHANCED**: Standardized `+<number>` (additive) and `*<number>` (multiplier) syntax
+  - **ENHANCED**: Visual ki bars in all combat commands for real-time tracking
+  - **ENHANCED**: Magic affinity display improvements and "Negative Energy" mapping
+  - **FIXED**: Health regeneration caps, interaction handling, and ki debuff system
+  - **UPDATED**: New 3-tier ki debuff system (0% → 25% → 55% → 85% progression)
 
 - **v0.0.4** (2025-08-14) - Release System & Combat Enhancement Updates
   - **NEW**: Release command for manual effective PL adjustment (`!release x%`)

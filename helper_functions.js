@@ -321,7 +321,7 @@ async function applyEndOfTurnEffects(characterId, database) {
     if (healthChange !== 0) {
         const maxHealth = character.base_pl * character.endurance;
         const currentHealth = character.current_health || maxHealth;
-        const newHealth = currentHealth + healthChange;
+        const newHealth = Math.min(maxHealth, currentHealth + healthChange); // Cap at max health
         
         await database.run(
             'UPDATE characters SET current_health = ? WHERE id = ?',

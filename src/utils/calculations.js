@@ -91,34 +91,33 @@ function calculateKiLossFromHealth(healthPercentage) {
     let totalLoss = 0;
     let remaining = 100 - healthPercentage;
     
-    // First 50% (100%-51%): 0.5% debuff per percentage lost
+    // First tier (100%-51%): 0.5% debuff per point lost [25% total loss]
+    // From 100% to 51% = 49 points, but we want exactly 25% total
+    // So: 50 points × 0.5% = 25%
     if (remaining > 0) {
-        const firstTier = Math.min(remaining, 49);
+        const firstTier = Math.min(remaining, 50); // 50 points to get exactly 25%
         totalLoss += firstTier * 0.5;
         remaining -= firstTier;
     }
     
-    // Next 30% (50%-21%): 0.75% debuff per percentage lost
+    // Second tier (50%-21%): 1% debuff per point lost [30% total loss for combined 55%]
+    // From 50% to 21% = 29 points, but we want exactly 30% additional
+    // So: 30 points × 1% = 30%
     if (remaining > 0) {
-        const secondTier = Math.min(remaining, 30);
-        totalLoss += secondTier * 0.75;
+        const secondTier = Math.min(remaining, 30); // 30 points to get exactly 30% additional
+        totalLoss += secondTier * 1.0;
         remaining -= secondTier;
     }
     
-    // Next 10% (20%-11%): 1% debuff per percentage lost
+    // Third tier (20%-0%): 1.5% debuff per point lost [30% total loss for combined 85%]
+    // From 20% to 0% = 20 points, but we want exactly 30% additional
+    // So: 20 points × 1.5% = 30%
     if (remaining > 0) {
-        const thirdTier = Math.min(remaining, 10);
-        totalLoss += thirdTier * 1.0;
-        remaining -= thirdTier;
+        const thirdTier = Math.min(remaining, 20); // 20 points × 1.5% = 30%
+        totalLoss += thirdTier * 1.5;
     }
     
-    // Last 10% (10%-0%): 1.5% debuff per percentage lost
-    if (remaining > 0) {
-        const fourthTier = Math.min(remaining, 10);
-        totalLoss += fourthTier * 1.5;
-    }
-    
-    return Math.min(totalLoss, 87.5); // Cap at 87.5%
+    return Math.min(totalLoss, 85); // Cap at 85% as per specifications
 }
 
 // Calculate effective PL based on base PL, ki percentage, and forms

@@ -1,5 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { staffRoleName, racials } = require('../utils/config');
+const { staffRoleName, racials, magicAffinityDisplayNames } = require('../utils/config');
 const { hasStaffRole } = require('../utils/calculations');
 
 module.exports = {
@@ -77,11 +77,14 @@ module.exports = {
 
                 // Add magic affinities if any
                 if (userData.primary_affinity) {
-                    embed.addFields({ name: 'Primary Affinity', value: userData.primary_affinity, inline: true });
+                    const displayName = magicAffinityDisplayNames[userData.primary_affinity] || userData.primary_affinity;
+                    embed.addFields({ name: 'Primary Affinity', value: displayName, inline: true });
                 }
 
                 if (userData.secondary_affinities) {
-                    const secondaryAffinities = userData.secondary_affinities.split(',').join(', ');
+                    const secondaryAffinities = userData.secondary_affinities.split(',')
+                        .map(affinity => magicAffinityDisplayNames[affinity] || affinity)
+                        .join(', ');
                     embed.addFields({ name: 'Secondary Affinities', value: secondaryAffinities, inline: true });
                 }
 

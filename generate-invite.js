@@ -9,7 +9,7 @@ if (!CLIENT_ID) {
     process.exit(1);
 }
 
-const permissions = '414537948224'; // Required permissions for the bot
+const permissions = '414537956416'; // Required permissions for the bot (includes Manage Messages)
 const inviteURL = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&permissions=${permissions}&scope=bot`;
 
 console.log('🤖 Dragon Ball Finality Bot Invitation');

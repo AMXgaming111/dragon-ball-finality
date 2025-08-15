@@ -13,7 +13,7 @@ const {
     getCombatBonuses,
     getCurrentKiCap
 } = require('../utils/calculations');
-const { storePendingAttack, cleanupExpiredAttacks } = require('../utils/combat');
+const { storePendingAttack, cleanupExpiredAttacks, addKiDisplay } = require('../utils/combat');
 const { autoManageTurnOrder } = require('../../helper_functions');
 
 module.exports = {
@@ -21,7 +21,7 @@ module.exports = {
     description: 'Attack another character',
     async execute(message, args, database) {
         if (args.length < 1) {
-            return message.reply('Usage: `!attack <@target>` or `!attack <modifiers> <@target>`\nModifiers: `a<multiplier>` (accuracy), `e<effort>` (1-5)');
+            return message.reply('Usage: `!attack <@target>` or `!attack <modifiers> <@target>`\nModifiers: `a<multiplier>` (accuracy), `e<effort>` (1-5)\nAttack modifiers: Use `+<number>` for additive (physical), `*<number>` for multiplier (ki)');
         }
 
         // Parse arguments
@@ -169,16 +169,16 @@ module.exports = {
                 
                 // For now, we'll implement physical and ki attacks
                 if (attackType === 'magic') {
-                    return interaction.reply({
-                        content: 'Magic attacks are not fully implemented yet.',
-                        ephemeral: true
-                    });
+                    await handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+                    return;
                 }
 
                 if (attackType === 'physical') {
                     await handlePhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
                 } else if (attackType === 'ki') {
                     await handleKiAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+                } else if (attackType === 'magic') {
+                    await handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
                 }
             });
 
@@ -218,8 +218,8 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
         .setTitle('💪 Physical Attack')
-        .setDescription('Please type your additive (or 0 for basic attack):')
-        .addFields({ name: 'Max Additive', value: `Your maximum additive is **${maxAdditive}**`, inline: false });    await interaction.update({ embeds: [embed], components: [] });
+        .setDescription('How would you like to modify your physical attack?\n(Use `+<number>` for additive, or `0` for basic):')
+        .addFields({ name: 'Max Additive', value: `Your maximum additive is **+${maxAdditive}**`, inline: false });    await interaction.update({ embeds: [embed], components: [] });
 
     // Wait for user input
     const filter = (msg) => msg.author.id === interaction.user.id;
@@ -238,7 +238,28 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     }
 
     const additiveInput = collected.first().content;
-    const additive = parseFloat(additiveInput) || 0;
+    let additive = 0;
+    let isBasic = false;
+
+    // Parse modifier using standardized system
+    if (additiveInput.startsWith('+')) {
+        const add = parseFloat(additiveInput.slice(1));
+        if (!isNaN(add) && add > 0) {
+            additive = add;
+        } else {
+            isBasic = true;
+        }
+    } else if (additiveInput.startsWith('*')) {
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Invalid Modifier Type')
+            .setDescription('Physical attacks only support additive modifiers! Use `+<number>` for additive or `0` for basic.');
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
+    } else if (additiveInput === '0') {
+        isBasic = true;
+    } else {
+        isBasic = true; // Default to basic for any other input
+    }
 
     // Calculate damage and accuracy
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, additive, database, attackerData.active_character_id);
@@ -252,7 +273,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     const effortKiCost = getEffortKiCost(effort);
     let kiChange = 0;
 
-    if (additive === 0 && accuracyMultiplier === 1) {
+    if ((additive === 0 || isBasic) && accuracyMultiplier === 1) {
         // Basic attack - gain 5% ki (but still apply effort cost if any)
         kiChange = Math.floor(attackerData.endurance * 0.05);
         if (effortKiCost > 0) {
@@ -289,12 +310,13 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     }
 
     // Update attacker's ki
+    let finalKi = attackerData.current_ki || attackerData.endurance;
     if (kiChange !== 0) {
         const currentKi = attackerData.current_ki || attackerData.endurance;
         let newKi = Math.max(0, currentKi + kiChange);
         
         // For basic attacks, respect health cap
-        if (additive === 0 && accuracyMultiplier === 1 && kiChange > 0) {
+        if ((additive === 0 || isBasic) && accuracyMultiplier === 1 && kiChange > 0) {
             const kiCap = await getCurrentKiCap(database, attackerData.active_character_id);
             newKi = Math.min(kiCap, newKi);
         }
@@ -303,6 +325,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
             'UPDATE characters SET current_ki = ? WHERE id = ?',
             [newKi, attackerData.active_character_id]
         );
+        finalKi = newKi;
     }
 
     // Get attacker's username for mention
@@ -316,7 +339,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         .addFields(
             { name: 'Attack Damage', value: damage.toString(), inline: true },
             { name: 'Accuracy', value: accuracy.toString(), inline: true },
-            { name: 'Attack Type', value: additive === 0 ? 'Basic' : 'Enhanced', inline: true }
+            { name: 'Attack Type', value: isBasic ? 'Basic' : `+${additive}`, inline: true }
         )
         .setFooter({ text: 'Target must defend within 5 minutes or take full damage!' });
 
@@ -326,6 +349,9 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
             value: `${kiChange > 0 ? '+' : ''}${kiChange}`, 
             inline: true 
         });
+        
+        // Add ki bar display
+        addKiDisplay(resultEmbed, attackerData.name, finalKi, attackerData.endurance);
     }
 
     // Add turn management footer and buttons
@@ -347,7 +373,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         additive: additive,
         effort: effort,
         accuracyMultiplier: accuracyMultiplier,
-        isBasic: additive === 0 && accuracyMultiplier === 1
+        isBasic: isBasic || additive === 0
     };
     
     await storePendingAttack(
@@ -427,8 +453,8 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     const embed = new EmbedBuilder()
         .setColor(0x3498db)
         .setTitle('⚡ Ki Attack')
-        .setDescription('Please type your multiplier (minimum 1.5, intervals of 0.5):\nExamples: 1.5, 2.0, 2.5, 3.0, etc.')
-        .addFields({ name: 'Max Affordable Multiplier', value: `With your current ki, you can afford up to **${maxMultiplier}x**`, inline: false });
+        .setDescription('Please type your multiplier using `*<number>` format (minimum *1.5, intervals of 0.5):\nExamples: *1.5, *2.0, *2.5, *3.0, etc.\n**Note: Ki attacks require a multiplier - no basic option available.**')
+        .addFields({ name: 'Max Affordable Multiplier', value: `With your current ki, you can afford up to **×${maxMultiplier}**`, inline: false });
 
     await interaction.update({ embeds: [embed], components: [] });
 
@@ -449,24 +475,58 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     }
 
     const multiplierInput = collected.first().content;
-    const multiplier = parseFloat(multiplierInput);
+    let multiplier = 0;
 
-    // Validate multiplier
-    if (isNaN(multiplier) || multiplier < 1.5) {
+    // Parse modifier using standardized system - ki attacks require explicit multipliers
+    if (multiplierInput.startsWith('*')) {
+        const mult = parseFloat(multiplierInput.slice(1));
+        if (!isNaN(mult)) {
+            if (mult >= 1.5) {
+                // Check if multiplier is in valid 0.5 intervals
+                const remainder = (mult - 1.0) % 0.5;
+                if (Math.abs(remainder) <= 0.001) { // Small tolerance for floating point precision
+                    multiplier = mult;
+                } else {
+                    const errorEmbed = new EmbedBuilder()
+                        .setColor(0xe74c3c)
+                        .setTitle('❌ Invalid Interval')
+                        .setDescription('Multiplier must be in 0.5 intervals! (e.g., *1.5, *2.0, *2.5, *3.0, etc.)');
+                    return interaction.editReply({ embeds: [errorEmbed], components: [] });
+                }
+            } else {
+                const errorEmbed = new EmbedBuilder()
+                    .setColor(0xe74c3c)
+                    .setTitle('❌ Invalid Multiplier')
+                    .setDescription('Multiplier must be at least *1.5!');
+                return interaction.editReply({ embeds: [errorEmbed], components: [] });
+            }
+        } else {
+            const errorEmbed = new EmbedBuilder()
+                .setColor(0xe74c3c)
+                .setTitle('❌ Invalid Input')
+                .setDescription('Please enter a valid multiplier using `*<number>` format (e.g., *1.5, *2.0).');
+            return interaction.editReply({ embeds: [errorEmbed], components: [] });
+        }
+    } else if (multiplierInput.startsWith('+')) {
         const errorEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)
-            .setTitle('❌ Invalid Multiplier')
-            .setDescription('Multiplier must be at least 1.5!');
+            .setTitle('❌ Invalid Modifier Type')
+            .setDescription('Ki attacks only support multiplier modifiers! Use `*<number>` for multiplier (minimum *1.5).');
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
+    } else {
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Invalid Input')
+            .setDescription('Ki attacks require a multiplier! Use `*<number>` format (e.g., *1.5, *2.0, *2.5).');
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
-    // Check if multiplier is in valid 0.5 intervals
-    const remainder = (multiplier - 1.0) % 0.5;
-    if (Math.abs(remainder) > 0.001) { // Small tolerance for floating point precision
+    // Validate multiplier
+    if (multiplier < 1.5) {
         const errorEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)
-            .setTitle('❌ Invalid Interval')
-            .setDescription('Multiplier must be in 0.5 intervals! (e.g., 1.5, 2.0, 2.5, 3.0, etc.)');
+            .setTitle('❌ Invalid Multiplier')
+            .setDescription('Ki attacks require a minimum multiplier of *1.5!');
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
@@ -543,10 +603,13 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
         .addFields(
             { name: 'Attack Damage', value: damage.toString(), inline: true },
             { name: 'Accuracy', value: accuracy.toString(), inline: true },
-            { name: 'Multiplier', value: `${multiplier}x`, inline: true },
+            { name: 'Multiplier', value: `*${multiplier}`, inline: true },
             { name: 'Ki Cost', value: totalKiCost.toString(), inline: true }
         )
         .setFooter({ text: 'Target must defend within 5 minutes or take full damage!' });
+
+    // Add ki bar display
+    addKiDisplay(resultEmbed, attackerData.name, newKi, attackerData.endurance);
 
     if (blowbackDamage > 0) {
         resultEmbed.addFields({ 
@@ -627,6 +690,109 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     }
     
     // Delete the user's multiplier input message
+    try {
+        await collected.first().delete();
+    } catch (error) {
+        // Might not have permission to delete
+    }
+}
+
+async function handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+    const embed = new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('✨ Magic Attack')
+        .setDescription('Please type your technique cost and affinity type (type p for primary and s for secondary).\nExamples: p10 for primary with base cost of 10, s5 for secondary with base cost of 5.');
+
+    await interaction.update({ embeds: [embed], components: [] });
+
+    // Wait for user input
+    const filter = (msg) => msg.author.id === interaction.user.id;
+    const collected = await interaction.channel.awaitMessages({ 
+        filter, 
+        max: 1, 
+        time: 30000 
+    });
+
+    if (collected.size === 0) {
+        const timeoutEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('⏰ Attack Timed Out')
+            .setDescription('Attack timed out.');
+        return interaction.editReply({ embeds: [timeoutEmbed], components: [] });
+    }
+
+    const magicInput = collected.first().content.toLowerCase();
+    let affinity = '';
+    let baseCost = 0;
+    let isValid = false;
+
+    // Parse input (p10, s5, etc.)
+    if (magicInput.startsWith('p') || magicInput.startsWith('s')) {
+        affinity = magicInput.charAt(0);
+        const costStr = magicInput.slice(1);
+        const cost = parseInt(costStr);
+        
+        if (!isNaN(cost) && cost > 0) {
+            baseCost = cost;
+            isValid = true;
+        }
+    }
+
+    if (!isValid) {
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Invalid Input')
+            .setDescription('Please enter a valid format: p<number> for primary or s<number> for secondary.\nExamples: p10, s5');
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
+    }
+
+    // Calculate ki cost based on affinity
+    let kiCost = 0;
+    if (affinity === 'p') {
+        // Primary Loss Formula: Technique Cost * (100 / Control)
+        kiCost = baseCost * (100 / attackerData.control);
+    } else if (affinity === 's') {
+        // Secondary Loss Formula: (Technique Cost * (100 / Control)) * 2
+        kiCost = (baseCost * (100 / attackerData.control)) * 2;
+    }
+
+    kiCost = Math.floor(kiCost); // Round down to integer
+
+    // Check if attacker has enough ki
+    const currentKi = attackerData.current_ki || attackerData.endurance;
+    if (kiCost > currentKi) {
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Insufficient Ki')
+            .setDescription(`Not enough ki! Need ${kiCost}, have ${currentKi}.`);
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
+    }
+
+    // Update attacker's ki
+    const newKi = Math.max(0, currentKi - kiCost);
+    await database.run(
+        'UPDATE characters SET current_ki = ? WHERE id = ?',
+        [newKi, attackerData.active_character_id]
+    );
+
+    // Create final result embed
+    const resultEmbed = new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('✨ Magic Spell Cast')
+        .setDescription(`**${attackerData.name}** has cast a spell!`)
+        .addFields(
+            { name: 'Affinity Type', value: affinity === 'p' ? 'Primary' : 'Secondary', inline: true },
+            { name: 'Base Cost', value: baseCost.toString(), inline: true },
+            { name: 'Ki Cost', value: kiCost.toString(), inline: true }
+        );
+
+    // Add ki bar display
+    addKiDisplay(resultEmbed, attackerData.name, newKi, attackerData.endurance);
+
+    // Edit the original message with the final result
+    await interaction.editReply({ embeds: [resultEmbed], components: [] });
+    
+    // Delete the user's magic input message
     try {
         await collected.first().delete();
     } catch (error) {

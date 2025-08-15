@@ -4,13 +4,35 @@ const { hasStaffRole } = require('../utils/calculations');
 
 module.exports = {
     name: 'sw',
-    description: 'Switch to another character',
+    description: 'Switch to another character. Use quotes for names with spaces: !sw "Name Here"',
     async execute(message, args, database) {
         if (args.length < 1) {
-            return message.reply('Usage: `!sw <character_name>`');
+            return message.reply('Usage: `!sw "<character_name>"` or `!sw <character_name>`');
         }
 
-        const characterName = args.join(' ');
+        let characterName;
+
+        // Check if the first argument starts with a quote
+        if (args[0].startsWith('"')) {
+            // Find the closing quote
+            const fullCommand = args.join(' ');
+            const firstQuote = fullCommand.indexOf('"');
+            const secondQuote = fullCommand.indexOf('"', firstQuote + 1);
+            
+            if (secondQuote === -1) {
+                return message.reply('Missing closing quote! Usage: `!sw "<character_name>"`\nExample: `!sw "Kazurai Sakada"`');
+            }
+            
+            // Extract name between quotes
+            characterName = fullCommand.substring(firstQuote + 1, secondQuote);
+            
+            if (!characterName) {
+                return message.reply('Invalid format! Usage: `!sw "<character_name>"`\nExample: `!sw "Kazurai Sakada"`');
+            }
+        } else {
+            // Original behavior for names without quotes
+            characterName = args.join(' ');
+        }
 
         try {
             // Find the character (case-insensitive)

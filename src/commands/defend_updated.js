@@ -13,7 +13,7 @@ const {
     getCombatBonuses,
     getCurrentKiCap
 } = require('../utils/calculations');
-const { getPendingAttack, resolveCombat, createCombatResultEmbed, cleanupExpiredAttacks, addKiDisplay } = require('../utils/combat');
+const { getPendingAttack, resolveCombat, createCombatResultEmbed, cleanupExpiredAttacks } = require('../utils/combat');
 const { autoManageTurnOrder, advanceTurnFromInteraction, applyEndOfTurnEffects } = require('../../helper_functions');
 
 module.exports = {
@@ -104,7 +104,7 @@ module.exports = {
             // Create defense type selection embed
             const embed = new EmbedBuilder()
                 .setColor(0x2ecc71)
-                .setTitle('🛡 How would you like to react?')
+                .setTitle('🛡️ How would you like to react?')
                 .setDescription(`**${defenderData.name}** is defending against **${attackerData.name}**`)
                 .addFields(
                     { name: 'Defender', value: `${defenderData.name} (PL: ${defenderEffectivePL})`, inline: true },
@@ -150,8 +150,10 @@ module.exports = {
 
                 let defenseType = interaction.customId.split('_')[1];
                 if (defenseType === 'magic') {
-                    await handleMagicDefense(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack);
-                    return;
+                    return interaction.reply({
+                        content: 'Magic defense is not fully implemented yet.',
+                        ephemeral: true
+                    });
                 }
 
                 if (defenseType === 'block') {
@@ -201,7 +203,7 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     
     const embed = new EmbedBuilder()
         .setColor(0x95a5a6)
-        .setTitle('🛡 Block Defense')
+        .setTitle('🛡️ Block Defense')
         .setDescription('How would you like to modify your block?\n(Use `+<number>` for additive, `*<number>` for multiplier, or `0` for basic)\nMultipliers: minimum *1.5, intervals of 0.5 (e.g., *1.5, *2.0, *2.5):')
         .addFields(
             { name: 'Max Additive', value: `Your maximum additive is **+${maxAdditive}**`, inline: true },
@@ -343,7 +345,6 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     const finalBlockValue = rollWithEffort(blockValue, effort);
 
     // Gain ki for basic blocks (after roll)
-    let finalKiAfterAll = newKi;
     if (isBasic) {
         const basicKiGain = Math.floor(defenderData.endurance * 0.05);
         const kiCap = await getCurrentKiCap(database, defenderData.active_character_id);
@@ -353,7 +354,6 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
             [finalKi, defenderData.active_character_id]
         );
         kiChange += basicKiGain;
-        finalKiAfterAll = finalKi;
     }
 
     // Resolve combat
@@ -371,9 +371,6 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
             value: `${kiChange > 0 ? '+' : ''}${kiChange}`, 
             inline: true 
         });
-        
-        // Add ki bar display
-        addKiDisplay(combatEmbed, defenderData.name, finalKiAfterAll, defenderData.endurance);
     }
 
     // Edit the original message with the final combat result
@@ -552,7 +549,6 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     const defenseValue = await calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, 0, database, defenderData.active_character_id);
 
     // Gain ki for basic dodges (after roll)
-    let finalKiAfterAll = newKi;
     if (isBasic) {
         const basicKiGain = Math.floor(defenderData.endurance * 0.05);
         const kiCap = await getCurrentKiCap(database, defenderData.active_character_id);
@@ -562,7 +558,6 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
             [finalKi, defenderData.active_character_id]
         );
         kiChange += basicKiGain;
-        finalKiAfterAll = finalKi;
     }
 
     // Resolve combat with dodge
@@ -582,124 +577,10 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         });
     }
 
-    // Add ki bar display when any ki actions occurred
-    if (kiChange !== 0) {
-        addKiDisplay(combatEmbed, defenderData.name, finalKiAfterAll, defenderData.endurance);
-    }
-
     // Edit the original message with the final combat result
     await interaction.editReply({ embeds: [combatEmbed], components: [] });
 
     // Delete the user's modifier input message
-    try {
-        await collected.first().delete();
-    } catch (error) {
-        // Might not have permission to delete
-    }
-}
-
-async function handleMagicDefense(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack) {
-    const embed = new EmbedBuilder()
-        .setColor(0x9b59b6)
-        .setTitle('✨ Magic Defense')
-        .setDescription('Please type your technique cost and affinity type (type p for primary and s for secondary).\nExamples: p10 for primary with base cost of 10, s5 for secondary with base cost of 5.');
-
-    await interaction.update({ embeds: [embed], components: [] });
-
-    // Wait for user input
-    const filter = (msg) => msg.author.id === interaction.user.id;
-    const collected = await interaction.channel.awaitMessages({ 
-        filter, 
-        max: 1, 
-        time: 30000 
-    });
-
-    if (collected.size === 0) {
-        const timeoutEmbed = new EmbedBuilder()
-            .setColor(0xe74c3c)
-            .setTitle('⏰ Defense Timed Out')
-            .setDescription('Defense timed out.');
-        return interaction.editReply({ embeds: [timeoutEmbed], components: [] });
-    }
-
-    const magicInput = collected.first().content.toLowerCase();
-    let affinity = '';
-    let baseCost = 0;
-    let isValid = false;
-
-    // Parse input (p10, s5, etc.)
-    if (magicInput.startsWith('p') || magicInput.startsWith('s')) {
-        affinity = magicInput.charAt(0);
-        const costStr = magicInput.slice(1);
-        const cost = parseInt(costStr);
-        
-        if (!isNaN(cost) && cost > 0) {
-            baseCost = cost;
-            isValid = true;
-        }
-    }
-
-    if (!isValid) {
-        const errorEmbed = new EmbedBuilder()
-            .setColor(0xe74c3c)
-            .setTitle('❌ Invalid Input')
-            .setDescription('Please enter a valid format: p<number> for primary or s<number> for secondary.\nExamples: p10, s5');
-        return interaction.editReply({ embeds: [errorEmbed], components: [] });
-    }
-
-    // Calculate ki cost based on affinity
-    let kiCost = 0;
-    if (affinity === 'p') {
-        // Primary Loss Formula: Technique Cost * (100 / Control)
-        kiCost = baseCost * (100 / defenderData.control);
-    } else if (affinity === 's') {
-        // Secondary Loss Formula: (Technique Cost * (100 / Control)) * 2
-        kiCost = (baseCost * (100 / defenderData.control)) * 2;
-    }
-
-    kiCost = Math.floor(kiCost); // Round down to integer
-
-    // Check if defender has enough ki
-    const currentKi = defenderData.current_ki || defenderData.endurance;
-    if (kiCost > currentKi) {
-        const errorEmbed = new EmbedBuilder()
-            .setColor(0xe74c3c)
-            .setTitle('❌ Insufficient Ki')
-            .setDescription(`Not enough ki! Need ${kiCost}, have ${currentKi}.`);
-        return interaction.editReply({ embeds: [errorEmbed], components: [] });
-    }
-
-    // Update defender's ki
-    const newKi = Math.max(0, currentKi - kiCost);
-    await database.run(
-        'UPDATE characters SET current_ki = ? WHERE id = ?',
-        [newKi, defenderData.active_character_id]
-    );
-
-    // Clean up the pending attack since magic defense doesn't block/dodge traditionally
-    await database.run(`
-        DELETE FROM pending_attacks 
-        WHERE channel_id = ? AND attacker_user_id = ? AND defender_user_id = ?
-    `, [pendingAttack.channel_id, pendingAttack.attacker_user_id, pendingAttack.defender_user_id]);
-
-    // Create final result embed
-    const resultEmbed = new EmbedBuilder()
-        .setColor(0x9b59b6)
-        .setTitle('✨ Magic Spell Cast')
-        .setDescription(`**${defenderData.name}** has cast a spell!`)
-        .addFields(
-            { name: 'Affinity Type', value: affinity === 'p' ? 'Primary' : 'Secondary', inline: true },
-            { name: 'Base Cost', value: baseCost.toString(), inline: true },
-            { name: 'Ki Cost', value: kiCost.toString(), inline: true }
-        );
-
-    // Add ki bar display
-    addKiDisplay(resultEmbed, defenderData.name, newKi, defenderData.endurance);
-
-    // Edit the original message with the final result
-    await interaction.editReply({ embeds: [resultEmbed], components: [] });
-    
-    // Delete the user's magic input message
     try {
         await collected.first().delete();
     } catch (error) {

@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { staffRoleName, magicAffinities } = require('../utils/config');
+const { staffRoleName, magicAffinities, magicAffinityDisplayNames } = require('../utils/config');
 const { hasStaffRole } = require('../utils/calculations');
 
 module.exports = {
@@ -50,6 +50,7 @@ module.exports = {
 
             const characterId = userData.active_character_id;
             const characterName = userData.name;
+            const displayName = magicAffinityDisplayNames[validAffinity] || validAffinity;
 
             if (action === '1') {
                 // Set as primary affinity
@@ -61,11 +62,11 @@ module.exports = {
                 const embed = new EmbedBuilder()
                     .setColor(0x9b59b6)
                     .setTitle('🔮 Primary Affinity Set')
-                    .setDescription(`**${characterName}**'s primary affinity has been set to **${validAffinity}**.`)
+                    .setDescription(`**${characterName}**'s primary affinity has been set to **${displayName}**.`)
                     .addFields(
                         { name: 'Character', value: characterName, inline: true },
                         { name: 'Owner', value: `<@${userId}>`, inline: true },
-                        { name: 'Primary Affinity', value: validAffinity, inline: true }
+                        { name: 'Primary Affinity', value: displayName, inline: true }
                     )
                     .setTimestamp();
 
@@ -83,20 +84,24 @@ module.exports = {
                         [secondaryAffinities.join(','), characterId]
                     );
 
+                    const displaySecondaryAffinities = secondaryAffinities
+                        .map(affinity => magicAffinityDisplayNames[affinity] || affinity)
+                        .join(', ');
+
                     const embed = new EmbedBuilder()
                         .setColor(0x8e44ad)
                         .setTitle('🔮 Secondary Affinity Added')
-                        .setDescription(`**${validAffinity}** has been added to **${characterName}**'s secondary affinities.`)
+                        .setDescription(`**${displayName}** has been added to **${characterName}**'s secondary affinities.`)
                         .addFields(
                             { name: 'Character', value: characterName, inline: true },
                             { name: 'Owner', value: `<@${userId}>`, inline: true },
-                            { name: 'Secondary Affinities', value: secondaryAffinities.join(', '), inline: false }
+                            { name: 'Secondary Affinities', value: displaySecondaryAffinities, inline: false }
                         )
                         .setTimestamp();
 
                     await message.reply({ embeds: [embed] });
                 } else {
-                    return message.reply(`${characterName} already has ${validAffinity} as a secondary affinity.`);
+                    return message.reply(`${characterName} already has ${displayName} as a secondary affinity.`);
                 }
 
             } else if (action === '0') {
@@ -128,7 +133,7 @@ module.exports = {
                     const embed = new EmbedBuilder()
                         .setColor(0x95a5a6)
                         .setTitle('🔮 Affinity Removed')
-                        .setDescription(`**${validAffinity}** has been removed from **${characterName}**'s affinities.`)
+                        .setDescription(`**${displayName}** has been removed from **${characterName}**'s affinities.`)
                         .addFields(
                             { name: 'Character', value: characterName, inline: true },
                             { name: 'Owner', value: `<@${userId}>`, inline: true }
@@ -137,7 +142,7 @@ module.exports = {
 
                     await message.reply({ embeds: [embed] });
                 } else {
-                    return message.reply(`${characterName} doesn't have ${validAffinity} as an affinity.`);
+                    return message.reply(`${characterName} doesn't have ${displayName} as an affinity.`);
                 }
             }
 
