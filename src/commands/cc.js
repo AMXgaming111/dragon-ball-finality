@@ -88,7 +88,7 @@ module.exports = {
                 .setDescription(`Successfully created **${characterName}** (${validRace})`)
                 .addFields(
                     { name: 'Race', value: validRace, inline: true },
-                    { name: 'Base PL', value: '10', inline: true },
+                    { name: 'Base PL', value: '1', inline: true },
                     { name: 'Racial Ability', value: racialTag ? racialTag : 'None', inline: true }
                 )
                 .setThumbnail(defaultCharacterImage)

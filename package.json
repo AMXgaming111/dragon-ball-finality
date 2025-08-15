@@ -1,13 +1,21 @@
 {
   "name": "dragon-ball-finality",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "description": "Discord RPG bot for Dragon Ball Finality server with character creation, combat system, and stat management",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "node index.js",
     "test": "node test-setup.js",
-    "setup": "node test-setup.js"
+    "setup": "node test-setup.js",
+    "deploy": "pm2 start ecosystem.config.json",
+    "stop": "pm2 stop dragonball-finality-bot",
+    "restart": "pm2 restart dragonball-finality-bot",
+    "status": "pm2 status",
+    "logs": "pm2 logs dragonball-finality-bot",
+    "health": "node health-check.js",
+    "monitor": "pm2 monit",
+    "production": "NODE_ENV=production pm2 start ecosystem.config.json"
   },
   "keywords": ["discord", "bot", "rpg", "dragonball", "game"],
   "author": "Tarik",
