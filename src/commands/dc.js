@@ -99,8 +99,8 @@ module.exports = {
                         // Delete character and related data
                         await database.run('DELETE FROM character_racials WHERE character_id = ?', [character.id]);
                         await database.run('DELETE FROM character_forms WHERE character_id = ?', [character.id]);
-                        await database.run('DELETE FROM character_current_form WHERE character_id = ?', [character.id]);
                         await database.run('DELETE FROM combat_state WHERE character_id = ?', [character.id]);
+                        await database.run('DELETE FROM pending_attacks WHERE attacker_character_id = ? OR target_character_id = ?', [character.id, character.id]);
                         
                         // Update users who had this as active character
                         await database.run('UPDATE users SET active_character_id = NULL WHERE active_character_id = ?', [character.id]);

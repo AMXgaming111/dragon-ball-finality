@@ -40,7 +40,7 @@ module.exports = {
 
             // Get current form if any
             const currentForm = await database.get(
-                'SELECT f.* FROM character_current_form ccf JOIN forms f ON ccf.form_key = f.form_key WHERE ccf.character_id = ?',
+                'SELECT f.* FROM character_forms cf JOIN forms f ON cf.form_key = f.form_key WHERE cf.character_id = ? AND cf.is_active = TRUE',
                 [userData.active_character_id]
             );
 

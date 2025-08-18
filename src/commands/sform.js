@@ -79,7 +79,6 @@ module.exports = {
                     if (interaction.customId === `delete_form_${deleteKey}`) {
                         try {
                             // Delete form and related data
-                            await database.run('DELETE FROM character_current_form WHERE form_key = ?', [deleteKey]);
                             await database.run('DELETE FROM character_forms WHERE form_key = ?', [deleteKey]);
                             await database.run('DELETE FROM forms WHERE form_key = ?', [deleteKey]);
 
