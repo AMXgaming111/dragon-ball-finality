@@ -3,6 +3,34 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
+// Railway health check server
+if (process.env.RAILWAY_ENVIRONMENT || process.env.PORT) {
+    const express = require('express');
+    const app = express();
+    const PORT = process.env.PORT || 3000;
+    
+    app.get('/', (req, res) => {
+        res.json({ 
+            status: 'Dragon Ball Finality Bot Running',
+            uptime: process.uptime(),
+            environment: process.env.RAILWAY_ENVIRONMENT ? 'Railway' : 'Local',
+            timestamp: new Date().toISOString()
+        });
+    });
+    
+    app.get('/health', (req, res) => {
+        res.json({ 
+            status: 'healthy',
+            bot: client?.isReady() ? 'ready' : 'not ready',
+            uptime: process.uptime()
+        });
+    });
+    
+    app.listen(PORT, () => {
+        console.log(`🌐 Health check server running on port ${PORT}`);
+    });
+}
+
 const Database = require('./src/database/database');
 const { prefix } = require('./src/utils/config');
 const { isServerAuthorized, handleUnauthorizedServer } = require('./src/utils/serverSecurity');

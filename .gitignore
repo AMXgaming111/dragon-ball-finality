@@ -4,8 +4,10 @@
 # Node modules
 node_modules/
 
-# Database files
-database/
+# Database files (but keep the directory structure)
+database/*.db
+database/*.sqlite
+database/*.sqlite3
 *.db
 *.sqlite
 *.sqlite3
