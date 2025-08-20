@@ -396,7 +396,9 @@ class Database {
 
     // Helper methods for common operations
     async createUser(userId) {
-        const query = 'INSERT OR IGNORE INTO users (user_id) VALUES (?)';
+        const query = this.usePostgres 
+            ? 'INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING'
+            : 'INSERT OR IGNORE INTO users (user_id) VALUES (?)';
         return await this.run(query, [userId]);
     }
 

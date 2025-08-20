@@ -158,16 +158,20 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
                 const attackerCombatBonuses = await getCombatBonuses(database, pendingAttack.attacker_character_id, pendingAttack.channel_id);
                 
                 // Store the last attacked target's effective PL for Zenkai checking (happens during end-of-turn)
-                await database.run(
-                    'INSERT OR REPLACE INTO combat_state (character_id, channel_id, zenkai_bonus, majin_magic_bonus, last_enemy_pl) VALUES (?, ?, ?, ?, ?)',
-                    [
-                        pendingAttack.attacker_character_id, 
-                        pendingAttack.channel_id, 
-                        attackerCombatBonuses.zenkaiBonus || 0,
-                        attackerCombatBonuses.majinMagicBonus || 0,
-                        targetEffectivePL
-                    ]
-                );
+                const combatQuery = database.usePostgres
+                    ? `INSERT INTO combat_state (character_id, channel_id, zenkai_bonus, majin_magic_bonus, last_enemy_pl) 
+                       VALUES ($1, $2, $3, $4, $5) 
+                       ON CONFLICT (character_id, channel_id) 
+                       DO UPDATE SET zenkai_bonus = $3, majin_magic_bonus = $4, last_enemy_pl = $5`
+                    : `INSERT OR REPLACE INTO combat_state (character_id, channel_id, zenkai_bonus, majin_magic_bonus, last_enemy_pl) VALUES (?, ?, ?, ?, ?)`;
+                
+                await database.run(combatQuery, [
+                    pendingAttack.attacker_character_id, 
+                    pendingAttack.channel_id, 
+                    attackerCombatBonuses.zenkaiBonus || 0,
+                    attackerCombatBonuses.majinMagicBonus || 0,
+                    targetEffectivePL
+                ]);
             }
         } catch (error) {
             console.error('Error storing last attack data for Zenkai:', error);

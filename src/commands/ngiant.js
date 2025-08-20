@@ -43,10 +43,14 @@ module.exports = {
 
             // If no giant entry exists, create it
             if (isActivating) {
-                await database.run(`
-                    INSERT OR IGNORE INTO character_racials (character_id, racial_tag, is_active)
-                    VALUES (?, 'ngiant', 1)
-                `, [userData.active_character_id]);
+                // Use PostgreSQL or SQLite compatible syntax
+                const query = database.usePostgres
+                    ? `INSERT INTO character_racials (character_id, racial_tag, is_active)
+                       VALUES ($1, 'ngiant', 1) ON CONFLICT (character_id, racial_tag) DO NOTHING`
+                    : `INSERT OR IGNORE INTO character_racials (character_id, racial_tag, is_active)
+                       VALUES (?, 'ngiant', 1)`;
+                
+                await database.run(query, [userData.active_character_id]);
             }
 
             // Calculate ki cost for giant form
