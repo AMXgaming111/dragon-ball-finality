@@ -339,13 +339,20 @@ class Database {
             let paramIndex = 1;
             pgQuery = pgQuery.replace(/\?/g, () => `$${paramIndex++}`);
             
+            // For INSERT statements, add RETURNING id to get the generated ID
+            if (pgQuery.trim().toUpperCase().startsWith('INSERT INTO') && 
+                !pgQuery.toUpperCase().includes('RETURNING') &&
+                !pgQuery.toUpperCase().includes('ON CONFLICT')) {
+                pgQuery += ' RETURNING id';
+            }
+            
             return new Promise((resolve, reject) => {
                 this.pool.query(pgQuery, params, (err, result) => {
                     if (err) {
                         reject(err);
                     } else {
                         resolve({ 
-                            id: result.insertId || result.rows?.[0]?.id,
+                            id: result.rows?.[0]?.id || result.insertId,
                             changes: result.rowCount || 0
                         });
                     }
@@ -424,10 +431,25 @@ class Database {
 
     // Helper methods for common operations
     async createUser(userId) {
-        const query = this.usePostgres 
-            ? 'INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING'
-            : 'INSERT OR IGNORE INTO users (user_id) VALUES (?)';
-        return await this.run(query, [userId]);
+        if (this.usePostgres) {
+            // Special handling for PostgreSQL - bypass automatic RETURNING id
+            const pgQuery = 'INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING';
+            return new Promise((resolve, reject) => {
+                this.pool.query(pgQuery, [userId], (err, result) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve({ 
+                            id: null, // No ID needed for this operation
+                            changes: result.rowCount || 0
+                        });
+                    }
+                });
+            });
+        } else {
+            const query = 'INSERT OR IGNORE INTO users (user_id) VALUES (?)';
+            return await this.run(query, [userId]);
+        }
     }
 
     async getUser(userId) {
@@ -450,7 +472,15 @@ class Database {
     }
 
     async getCharacterWithRacials(characterId) {
-        const query = `
+        const query = this.usePostgres ? `
+            SELECT c.*, 
+                   STRING_AGG(cr.racial_tag, ',') as racials,
+                   STRING_AGG(cr.is_active::text, ',') as racial_states
+            FROM characters c
+            LEFT JOIN character_racials cr ON c.id = cr.character_id
+            WHERE c.id = ?
+            GROUP BY c.id, c.name, c.owner_id, c.race, c.base_pl, c.strength, c.defense, c.agility, c.endurance, c.control, c.current_health, c.current_ki, c.release_percentage, c.image_url, c.ki_control, c.magic_mastery, c.primary_affinity, c.secondary_affinities, c.created_at
+        ` : `
             SELECT c.*, 
                    GROUP_CONCAT(cr.racial_tag) as racials,
                    GROUP_CONCAT(cr.is_active) as racial_states
