@@ -4,7 +4,12 @@ const fs = require('fs');
 
 class Database {
     constructor() {
-        this.dbPath = path.join(__dirname, '../../database/dragonball.db');
+        // Use Railway's persistent volume or local path
+        if (process.env.RAILWAY_ENVIRONMENT) {
+            this.dbPath = '/data/dragonball.db';
+        } else {
+            this.dbPath = path.join(__dirname, '../../database/dragonball.db');
+        }
         this.db = null;
     }
 

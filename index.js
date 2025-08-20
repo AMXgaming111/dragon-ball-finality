@@ -144,5 +144,35 @@ process.on('unhandledRejection', error => {
     console.error('Unhandled promise rejection:', error);
 });
 
+// Graceful shutdown handling
+async function gracefulShutdown(signal) {
+    console.log(`\n📡 Received ${signal}. Shutting down gracefully...`);
+    
+    try {
+        // Close database connection and cleanup
+        if (client.database) {
+            console.log('🗄️  Closing database connection...');
+            await client.database.closeDatabase();
+        }
+        
+        // Destroy Discord client
+        if (client) {
+            console.log('🤖 Destroying Discord client...');
+            client.destroy();
+        }
+        
+        console.log('✅ Graceful shutdown complete');
+        process.exit(0);
+    } catch (error) {
+        console.error('❌ Error during shutdown:', error);
+        process.exit(1);
+    }
+}
+
+// Handle various shutdown signals
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGUSR2', () => gracefulShutdown('SIGUSR2')); // Nodemon restart signal
+
 // Login to Discord
 client.login(process.env.DISCORD_TOKEN);

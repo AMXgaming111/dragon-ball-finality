@@ -8,3 +8,10 @@ restartPolicyType = "always"
 
 [environments.production.variables]
 NODE_ENV = "production"
+
+# Add persistent volume for SQLite database
+[[services]]
+name = "dragon-ball-finality"
+
+[services.volumes]
+data = "/data"
