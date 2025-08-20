@@ -1,25 +1,20 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('test')
-        .setDescription('Enhanced test command to verify bot functionality and debug persistence'),
-
-    async execute(interaction) {
+    name: 'test',
+    description: 'Enhanced test command to verify bot functionality and debug persistence',
+    async execute(message, args, database) {
         try {
-            await interaction.deferReply();
-
             // Get database info
-            const db = interaction.client.database;
             let dbInfo = 'Database not initialized';
             let characterCount = 0;
             let dbError = null;
             
-            if (db && db.dbPath) {
-                dbInfo = `Path: ${db.dbPath}`;
+            if (database && database.dbPath) {
+                dbInfo = `Path: ${database.dbPath}`;
                 try {
                     // Test database connection
-                    const result = await db.all('SELECT COUNT(*) as count FROM characters');
+                    const result = await database.all('SELECT COUNT(*) as count FROM characters');
                     characterCount = result[0]?.count || 0;
                 } catch (error) {
                     dbError = error.message;
@@ -41,13 +36,13 @@ module.exports = {
                 )
                 .setColor(dbError ? 0xff0000 : 0x00ff00)
                 .setTimestamp()
-                .setFooter({ text: 'Persistence Test - Check if this survives redeployment!' });
+                .setFooter({ text: 'Persistence Test - Use !test to check bot status' });
 
-            await interaction.editReply({ embeds: [testEmbed] });
+            await message.reply({ embeds: [testEmbed] });
 
             // Log detailed info to console for debugging
             console.log('🧪 TEST COMMAND EXECUTED:');
-            console.log('📍 Database Path:', db?.dbPath);
+            console.log('📍 Database Path:', database?.dbPath);
             console.log('👥 Character Count:', characterCount);
             console.log('❌ Database Error:', dbError);
             console.log('🌐 Environment Variables:');
@@ -65,13 +60,10 @@ module.exports = {
                     .setColor(0xff0000)
                     .setTimestamp();
 
-                if (interaction.deferred) {
-                    await interaction.editReply({ embeds: [errorEmbed] });
-                } else {
-                    await interaction.reply({ embeds: [errorEmbed] });
-                }
+                await message.reply({ embeds: [errorEmbed] });
             } catch (replyError) {
                 console.error('❌ Failed to send error message:', replyError);
+                await message.reply('❌ Test command failed with an error.');
             }
         }
     },

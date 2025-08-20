@@ -1,24 +1,16 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { hasStaffRole } = require('../../utils/helpers');
+const { EmbedBuilder } = require('discord.js');
+const { hasStaffRole } = require('../../utils/calculations');
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('testdata')
-        .setDescription('[STAFF] Create test character data for persistence testing'),
-
-    async execute(interaction) {
-        if (!hasStaffRole(interaction.member)) {
-            return interaction.reply({ 
-                content: '❌ This command is for staff members only!', 
-                ephemeral: true 
-            });
+    name: 'testdata',
+    description: '[STAFF] Create test character data for persistence testing',
+    async execute(message, args, database) {
+        if (!hasStaffRole(message.member)) {
+            return message.reply('❌ This command is for staff members only!');
         }
 
-        await interaction.deferReply();
-
         try {
-            const db = interaction.client.database;
-            const userId = interaction.user.id;
+            const userId = message.author.id;
             
             // Create test character
             const testCharacterData = {
@@ -30,18 +22,19 @@ module.exports = {
                 appearance: 'Glowing with test data energy'
             };
 
-            const result = await db.createCharacter(userId, testCharacterData);
-            const characterId = result.lastID;
+            // Create character using the database schema
+            const result = await database.run(`
+                INSERT INTO characters (name, owner_id, race, base_pl, strength, defense, agility, endurance, control)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                testCharacterData.name,
+                userId,
+                testCharacterData.race,
+                1000, // base_pl
+                5, 5, 5, 5, 5 // stats
+            ]);
 
-            // Add some stats
-            await db.updateCharacterStats(characterId, {
-                base_pl: 1000,
-                strength: 5,
-                endurance: 5,
-                dexterity: 5,
-                intelligence: 5,
-                ki_control: 5
-            });
+            const characterId = result.id;
 
             const embed = new EmbedBuilder()
                 .setTitle('🧪 Test Character Created')
@@ -56,9 +49,9 @@ module.exports = {
                 )
                 .setColor(0x0099ff)
                 .setTimestamp()
-                .setFooter({ text: 'Use /test to check if this survives redeployment!' });
+                .setFooter({ text: 'Use !test to check if this survives redeployment!' });
 
-            await interaction.editReply({ embeds: [embed] });
+            await message.reply({ embeds: [embed] });
 
             console.log(`🧪 Test character created: ${testCharacterData.name} (ID: ${characterId})`);
 
@@ -70,7 +63,7 @@ module.exports = {
                 .setDescription(`Error: ${error.message}`)
                 .setColor(0xff0000);
 
-            await interaction.editReply({ embeds: [errorEmbed] });
+            await message.reply({ embeds: [errorEmbed] });
         }
     },
 };
