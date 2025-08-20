@@ -339,11 +339,20 @@ class Database {
             let paramIndex = 1;
             pgQuery = pgQuery.replace(/\?/g, () => `$${paramIndex++}`);
             
-            // For INSERT statements, add RETURNING id to get the generated ID
+            // For INSERT statements, add RETURNING id only for tables that have an id column
             if (pgQuery.trim().toUpperCase().startsWith('INSERT INTO') && 
                 !pgQuery.toUpperCase().includes('RETURNING') &&
                 !pgQuery.toUpperCase().includes('ON CONFLICT')) {
-                pgQuery += ' RETURNING id';
+                
+                // Only add RETURNING id for tables that have an id column
+                const tableMatch = pgQuery.match(/INSERT\s+INTO\s+(\w+)/i);
+                if (tableMatch) {
+                    const tableName = tableMatch[1].toLowerCase();
+                    const tablesWithId = ['characters', 'forms', 'pending_attacks'];
+                    if (tablesWithId.includes(tableName)) {
+                        pgQuery += ' RETURNING id';
+                    }
+                }
             }
             
             return new Promise((resolve, reject) => {
