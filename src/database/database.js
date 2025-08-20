@@ -281,8 +281,13 @@ class Database {
         // Migration: Add release_percentage column if it doesn't exist
         try {
             // Check if release_percentage column exists
-            const columns = await this.all(`PRAGMA table_info(characters)`);
-            const hasReleasePercentage = columns.some(col => col.name === 'release_percentage');
+            const columns = this.usePostgres 
+                ? await this.all(`SELECT column_name FROM information_schema.columns WHERE table_name = 'characters' AND column_name = 'release_percentage'`)
+                : await this.all(`PRAGMA table_info(characters)`);
+            
+            const hasReleasePercentage = this.usePostgres 
+                ? columns.length > 0
+                : columns.some(col => col.name === 'release_percentage');
             
             if (!hasReleasePercentage) {
                 await this.run(`ALTER TABLE characters ADD COLUMN release_percentage REAL DEFAULT 100.0`);
@@ -298,9 +303,17 @@ class Database {
 
         // Migration: Add racial_tag column if it doesn't exist and migrate data
         try {
-            const tableInfo = await this.all(`PRAGMA table_info(character_racials)`);
-            const hasRacialTag = tableInfo.some(col => col.name === 'racial_tag');
-            const hasRacialName = tableInfo.some(col => col.name === 'racial_name');
+            const tableInfo = this.usePostgres
+                ? await this.all(`SELECT column_name FROM information_schema.columns WHERE table_name = 'character_racials'`)
+                : await this.all(`PRAGMA table_info(character_racials)`);
+            
+            const hasRacialTag = this.usePostgres
+                ? tableInfo.some(col => col.column_name === 'racial_tag')
+                : tableInfo.some(col => col.name === 'racial_tag');
+            
+            const hasRacialName = this.usePostgres
+                ? tableInfo.some(col => col.column_name === 'racial_name')
+                : tableInfo.some(col => col.name === 'racial_name');
             
             if (!hasRacialTag && hasRacialName) {
                 console.log('Migrating character_racials from racial_name to racial_tag...');
@@ -321,8 +334,13 @@ class Database {
     // Wrapper for database queries
     run(query, params = []) {
         if (this.usePostgres) {
+            // Convert ? placeholders to $1, $2, $3 format for PostgreSQL
+            let pgQuery = query;
+            let paramIndex = 1;
+            pgQuery = pgQuery.replace(/\?/g, () => `$${paramIndex++}`);
+            
             return new Promise((resolve, reject) => {
-                this.pool.query(query, params, (err, result) => {
+                this.pool.query(pgQuery, params, (err, result) => {
                     if (err) {
                         reject(err);
                     } else {
@@ -348,8 +366,13 @@ class Database {
 
     get(query, params = []) {
         if (this.usePostgres) {
+            // Convert ? placeholders to $1, $2, $3 format for PostgreSQL
+            let pgQuery = query;
+            let paramIndex = 1;
+            pgQuery = pgQuery.replace(/\?/g, () => `$${paramIndex++}`);
+            
             return new Promise((resolve, reject) => {
-                this.pool.query(query, params, (err, result) => {
+                this.pool.query(pgQuery, params, (err, result) => {
                     if (err) {
                         reject(err);
                     } else {
@@ -372,8 +395,13 @@ class Database {
 
     all(query, params = []) {
         if (this.usePostgres) {
+            // Convert ? placeholders to $1, $2, $3 format for PostgreSQL
+            let pgQuery = query;
+            let paramIndex = 1;
+            pgQuery = pgQuery.replace(/\?/g, () => `$${paramIndex++}`);
+            
             return new Promise((resolve, reject) => {
-                this.pool.query(query, params, (err, result) => {
+                this.pool.query(pgQuery, params, (err, result) => {
                     if (err) {
                         reject(err);
                     } else {
