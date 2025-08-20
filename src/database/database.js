@@ -461,6 +461,24 @@ class Database {
         }
     }
 
+    // Helper method to handle boolean comparisons across PostgreSQL and SQLite
+    getBooleanValue(value) {
+        if (this.usePostgres) {
+            return value === true || value === 'true' || value === 1 || value === '1' ? 'TRUE' : 'FALSE';
+        } else {
+            return value === true || value === 'true' || value === 1 || value === '1' ? 1 : 0;
+        }
+    }
+
+    // Helper method to create database-compatible boolean comparison queries
+    createBooleanQuery(baseQuery, booleanValue = true) {
+        if (this.usePostgres) {
+            return baseQuery.replace(/is_active\s*=\s*[01]/gi, `is_active = ${booleanValue ? 'TRUE' : 'FALSE'}`);
+        } else {
+            return baseQuery.replace(/is_active\s*=\s*(TRUE|FALSE)/gi, `is_active = ${booleanValue ? 1 : 0}`);
+        }
+    }
+
     async getUser(userId) {
         const query = 'SELECT * FROM users WHERE user_id = ?';
         return await this.get(query, [userId]);

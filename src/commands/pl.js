@@ -33,16 +33,20 @@ module.exports = {
             const racials = characterData.racials ? characterData.racials.split(',') : [];
             
             // Check for active Arcosian Resilience racial
-            const hasArcosianResilience = await database.get(`
-                SELECT is_active FROM character_racials 
-                WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
-            `, [userData.active_character_id]);
+            const arcosianQuery = database.usePostgres 
+                ? `SELECT is_active FROM character_racials 
+                   WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = TRUE`
+                : `SELECT is_active FROM character_racials 
+                   WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1`;
+            
+            const hasArcosianResilience = await database.get(arcosianQuery, [userData.active_character_id]);
 
             // Get current form if any
-            const currentForm = await database.get(
-                'SELECT f.* FROM character_forms cf JOIN forms f ON cf.form_key = f.form_key WHERE cf.character_id = ? AND cf.is_active = TRUE',
-                [userData.active_character_id]
-            );
+            const formQuery = database.usePostgres
+                ? 'SELECT f.* FROM character_forms cf JOIN forms f ON cf.form_key = f.form_key WHERE cf.character_id = ? AND cf.is_active = TRUE'
+                : 'SELECT f.* FROM character_forms cf JOIN forms f ON cf.form_key = f.form_key WHERE cf.character_id = ? AND cf.is_active = 1';
+            
+            const currentForm = await database.get(formQuery, [userData.active_character_id]);
 
             // Calculate current health and ki values
             let currentHealth = userData.current_health;
