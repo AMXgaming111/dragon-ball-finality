@@ -10,16 +10,22 @@ module.exports = {
             let characterCount = 0;
             let dbError = null;
             
-            if (database && database.dbPath) {
-                dbInfo = `Path: ${database.dbPath}`;
+            if (database && (database.dbPath || database.usePostgres)) {
+                const dbType = database.usePostgres ? 'PostgreSQL' : 'SQLite';
+                const dbPath = database.usePostgres ? 'Railway PostgreSQL' : database.dbPath;
+                dbInfo = `Type: ${dbType}\nPath: ${dbPath}`;
+                
                 try {
                     // Test database connection and get detailed info
                     const result = await database.all('SELECT COUNT(*) as count FROM characters');
                     characterCount = result[0]?.count || 0;
                     
-                    // Check what tables exist
-                    const tables = await database.all("SELECT name FROM sqlite_master WHERE type='table'");
-                    const tableNames = tables.map(t => t.name).join(', ');
+                    // Check what tables exist (different syntax for PostgreSQL vs SQLite)
+                    const tablesQuery = database.usePostgres 
+                        ? "SELECT tablename as name FROM pg_tables WHERE schemaname = 'public'"
+                        : "SELECT name FROM sqlite_master WHERE type='table'";
+                    const tables = await database.all(tablesQuery);
+                    const tableNames = tables.map(t => t.name || t.tablename).join(', ');
                     dbInfo += `\nTables: ${tableNames}`;
                     
                     // Get sample character data if any exists

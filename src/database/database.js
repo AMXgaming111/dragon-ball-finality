@@ -4,57 +4,170 @@ const fs = require('fs');
 
 class Database {
     constructor() {
-        // Simple Railway approach - use app directory which should be more persistent than /tmp
-        if (process.env.RAILWAY_ENVIRONMENT) {
-            this.dbPath = '/app/dragonball.db';
+        // Use PostgreSQL on Railway if DATABASE_URL is available, SQLite locally
+        this.usePostgres = !!process.env.DATABASE_URL;
+        
+        if (this.usePostgres) {
+            console.log('🐘 Using PostgreSQL for Railway deployment');
+            const { Pool } = require('pg');
+            this.pool = new Pool({
+                connectionString: process.env.DATABASE_URL,
+                ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+            });
         } else {
+            console.log('🗄️  Using SQLite for local development');
             this.dbPath = path.join(__dirname, '../../database/dragonball.db');
+            this.db = null;
         }
-        this.db = null;
-        console.log('🗄️  Database path:', this.dbPath);
+        
+        console.log('🗄️  Database configured:', this.usePostgres ? 'PostgreSQL' : `SQLite at ${this.dbPath}`);
     }
 
     async init() {
         return new Promise((resolve, reject) => {
             console.log('🗄️  Database initialization starting...');
-            console.log('📍 Database path:', this.dbPath);
-            console.log('🌐 Environment:', process.env.RAILWAY_ENVIRONMENT ? 'Railway' : 'Local');
+            console.log('� Database type:', this.usePostgres ? 'PostgreSQL' : 'SQLite');
             
-            // Ensure database directory exists
-            const dbDir = path.dirname(this.dbPath);
-            console.log('📁 Database directory:', dbDir);
-            
-            if (!fs.existsSync(dbDir)) {
-                console.log('📂 Creating database directory...');
-                fs.mkdirSync(dbDir, { recursive: true });
-                console.log('✅ Created database directory:', dbDir);
+            if (this.usePostgres) {
+                // Test PostgreSQL connection
+                this.pool.query('SELECT NOW() as current_time', (err, result) => {
+                    if (err) {
+                        console.error('❌ PostgreSQL connection error:', err);
+                        reject(err);
+                    } else {
+                        console.log('✅ Connected to PostgreSQL database');
+                        console.log('🕐 Server time:', result.rows[0].current_time);
+                        this.createTables().then(resolve).catch(reject);
+                    }
+                });
             } else {
-                console.log('✅ Database directory exists');
-            }
-
-            this.db = new sqlite3.Database(this.dbPath, (err) => {
-                if (err) {
-                    console.error('❌ Error opening database:', err);
-                    reject(err);
-                    return;
-                }
+                // SQLite initialization (local development)
+                console.log('� SQLite path:', this.dbPath);
                 
-                console.log('Connected to SQLite database');
-                this.createTables().then(resolve).catch(reject);
-            });
+                const dbDir = path.dirname(this.dbPath);
+                if (!fs.existsSync(dbDir)) {
+                    console.log('📂 Creating database directory...');
+                    fs.mkdirSync(dbDir, { recursive: true });
+                    console.log('✅ Created database directory:', dbDir);
+                }
+
+                this.db = new sqlite3.Database(this.dbPath, (err) => {
+                    if (err) {
+                        console.error('❌ Error opening SQLite database:', err);
+                        reject(err);
+                        return;
+                    }
+                    
+                    console.log('✅ Connected to SQLite database');
+                    this.createTables().then(resolve).catch(reject);
+                });
+            }
         });
     }
 
     async createTables() {
-        const tables = [
-            // Users table
+        // PostgreSQL and SQLite compatible table definitions
+        const tables = this.usePostgres ? [
+            // PostgreSQL table definitions
+            `CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY,
+                active_character_id INTEGER DEFAULT NULL
+            )`,
+            
+            `CREATE TABLE IF NOT EXISTS characters (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                owner_id TEXT NOT NULL,
+                race TEXT NOT NULL,
+                base_pl INTEGER DEFAULT 1,
+                strength INTEGER DEFAULT 1,
+                defense INTEGER DEFAULT 1,
+                agility INTEGER DEFAULT 1,
+                endurance INTEGER DEFAULT 1,
+                control INTEGER DEFAULT 1,
+                current_health INTEGER DEFAULT NULL,
+                current_ki INTEGER DEFAULT NULL,
+                release_percentage REAL DEFAULT 100.0,
+                image_url TEXT DEFAULT NULL,
+                ki_control INTEGER DEFAULT 0,
+                magic_mastery INTEGER DEFAULT 0,
+                primary_affinity TEXT DEFAULT NULL,
+                secondary_affinities TEXT DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(name)
+            )`,
+            
+            `CREATE TABLE IF NOT EXISTS character_racials (
+                character_id INTEGER,
+                racial_tag TEXT,
+                is_active BOOLEAN DEFAULT TRUE,
+                PRIMARY KEY (character_id, racial_tag)
+            )`,
+            
+            `CREATE TABLE IF NOT EXISTS forms (
+                form_key TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                strength_modifier TEXT DEFAULT NULL,
+                defense_modifier TEXT DEFAULT NULL,
+                agility_modifier TEXT DEFAULT NULL,
+                endurance_modifier TEXT DEFAULT NULL,
+                control_modifier TEXT DEFAULT NULL,
+                pl_modifier TEXT DEFAULT NULL,
+                ki_activation_cost TEXT DEFAULT NULL,
+                health_activation_cost TEXT DEFAULT NULL,
+                ki_drain TEXT DEFAULT NULL,
+                health_drain TEXT DEFAULT NULL,
+                is_stackable BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            
+            `CREATE TABLE IF NOT EXISTS character_forms (
+                character_id INTEGER,
+                form_key TEXT,
+                is_active BOOLEAN DEFAULT FALSE,
+                PRIMARY KEY (character_id, form_key)
+            )`,
+            
+            `CREATE TABLE IF NOT EXISTS turn_orders (
+                channel_id TEXT PRIMARY KEY,
+                participants TEXT NOT NULL,
+                current_turn INTEGER DEFAULT 0,
+                current_round INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            
+            `CREATE TABLE IF NOT EXISTS combat_state (
+                character_id INTEGER,
+                channel_id TEXT,
+                zenkai_bonus INTEGER DEFAULT 0,
+                majin_magic_bonus INTEGER DEFAULT 0,
+                last_attacker_pl INTEGER DEFAULT 0,
+                last_enemy_pl INTEGER DEFAULT 0,
+                PRIMARY KEY (character_id, channel_id)
+            )`,
+            
+            `CREATE TABLE IF NOT EXISTS pending_attacks (
+                id SERIAL PRIMARY KEY,
+                channel_id TEXT NOT NULL,
+                attacker_user_id TEXT NOT NULL,
+                target_user_id TEXT NOT NULL,
+                attacker_character_id INTEGER NOT NULL,
+                target_character_id INTEGER NOT NULL,
+                attack_type TEXT NOT NULL,
+                damage INTEGER NOT NULL,
+                accuracy INTEGER NOT NULL,
+                attack_data TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL
+            )`
+        ] : [
+            // SQLite table definitions (existing)
             `CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
                 active_character_id INTEGER DEFAULT NULL,
                 FOREIGN KEY (active_character_id) REFERENCES characters (id)
             )`,
             
-            // Characters table
             `CREATE TABLE IF NOT EXISTS characters (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL COLLATE NOCASE,
@@ -79,7 +192,6 @@ class Database {
                 UNIQUE(name)
             )`,
             
-            // Character racials junction table
             `CREATE TABLE IF NOT EXISTS character_racials (
                 character_id INTEGER,
                 racial_tag TEXT,
@@ -88,7 +200,6 @@ class Database {
                 FOREIGN KEY (character_id) REFERENCES characters (id)
             )`,
             
-            // Forms table
             `CREATE TABLE IF NOT EXISTS forms (
                 form_key TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -106,7 +217,6 @@ class Database {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`,
             
-            // Character forms junction table
             `CREATE TABLE IF NOT EXISTS character_forms (
                 character_id INTEGER,
                 form_key TEXT,
@@ -116,7 +226,6 @@ class Database {
                 FOREIGN KEY (form_key) REFERENCES forms (form_key)
             )`,
             
-            // Turn orders table
             `CREATE TABLE IF NOT EXISTS turn_orders (
                 channel_id TEXT PRIMARY KEY,
                 participants TEXT NOT NULL,
@@ -125,7 +234,6 @@ class Database {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`,
             
-            // Combat state table for tracking zenkai and other combat effects
             `CREATE TABLE IF NOT EXISTS combat_state (
                 character_id INTEGER,
                 channel_id TEXT,
@@ -137,7 +245,6 @@ class Database {
                 FOREIGN KEY (character_id) REFERENCES characters (id)
             )`,
             
-            // Pending attacks table for attack-defend resolution
             `CREATE TABLE IF NOT EXISTS pending_attacks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 channel_id TEXT NOT NULL,
@@ -213,39 +320,78 @@ class Database {
 
     // Wrapper for database queries
     run(query, params = []) {
-        return new Promise((resolve, reject) => {
-            this.db.run(query, params, function(err) {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve({ id: this.lastID, changes: this.changes });
-                }
+        if (this.usePostgres) {
+            return new Promise((resolve, reject) => {
+                this.pool.query(query, params, (err, result) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve({ 
+                            id: result.insertId || result.rows?.[0]?.id,
+                            changes: result.rowCount || 0
+                        });
+                    }
+                });
             });
-        });
+        } else {
+            return new Promise((resolve, reject) => {
+                this.db.run(query, params, function(err) {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve({ id: this.lastID, changes: this.changes });
+                    }
+                });
+            });
+        }
     }
 
     get(query, params = []) {
-        return new Promise((resolve, reject) => {
-            this.db.get(query, params, (err, row) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(row);
-                }
+        if (this.usePostgres) {
+            return new Promise((resolve, reject) => {
+                this.pool.query(query, params, (err, result) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(result.rows?.[0] || null);
+                    }
+                });
             });
-        });
+        } else {
+            return new Promise((resolve, reject) => {
+                this.db.get(query, params, (err, row) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(row);
+                    }
+                });
+            });
+        }
     }
 
     all(query, params = []) {
-        return new Promise((resolve, reject) => {
-            this.db.all(query, params, (err, rows) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(rows);
-                }
+        if (this.usePostgres) {
+            return new Promise((resolve, reject) => {
+                this.pool.query(query, params, (err, result) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(result.rows || []);
+                    }
+                });
             });
-        });
+        } else {
+            return new Promise((resolve, reject) => {
+                this.db.all(query, params, (err, rows) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(rows);
+                    }
+                });
+            });
+        }
     }
 
     // Helper methods for common operations
