@@ -53,6 +53,7 @@ class Database {
                 control INTEGER DEFAULT 1,
                 current_health INTEGER DEFAULT NULL,
                 current_ki INTEGER DEFAULT NULL,
+                release_percentage REAL DEFAULT 100.0,
                 image_url TEXT DEFAULT NULL,
                 ki_control INTEGER DEFAULT 0,
                 magic_mastery INTEGER DEFAULT 0,
@@ -153,6 +154,45 @@ class Database {
             if (!error.message.includes('duplicate column name')) {
                 console.log('Column migration handled:', error.message);
             }
+        }
+
+        // Migration: Add release_percentage column if it doesn't exist
+        try {
+            // Check if release_percentage column exists
+            const columns = await this.all(`PRAGMA table_info(characters)`);
+            const hasReleasePercentage = columns.some(col => col.name === 'release_percentage');
+            
+            if (!hasReleasePercentage) {
+                await this.run(`ALTER TABLE characters ADD COLUMN release_percentage REAL DEFAULT 100.0`);
+                console.log('Added release_percentage column to characters table');
+                
+                // Set default values for existing characters
+                await this.run(`UPDATE characters SET release_percentage = 100.0 WHERE release_percentage IS NULL`);
+                console.log('Set default release_percentage values for existing characters');
+            }
+        } catch (error) {
+            console.log('Release percentage migration error:', error.message);
+        }
+
+        // Migration: Add racial_tag column if it doesn't exist and migrate data
+        try {
+            const tableInfo = await this.all(`PRAGMA table_info(character_racials)`);
+            const hasRacialTag = tableInfo.some(col => col.name === 'racial_tag');
+            const hasRacialName = tableInfo.some(col => col.name === 'racial_name');
+            
+            if (!hasRacialTag && hasRacialName) {
+                console.log('Migrating character_racials from racial_name to racial_tag...');
+                
+                // Add racial_tag column
+                await this.run(`ALTER TABLE character_racials ADD COLUMN racial_tag TEXT`);
+                
+                // Copy data from racial_name to racial_tag
+                await this.run(`UPDATE character_racials SET racial_tag = racial_name WHERE racial_tag IS NULL`);
+                
+                console.log('Migration completed: racial_name -> racial_tag');
+            }
+        } catch (error) {
+            console.log('Migration handled:', error.message);
         }
     }
 
