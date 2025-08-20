@@ -4,9 +4,12 @@ const fs = require('fs');
 
 class Database {
     constructor() {
-        // Use Railway's persistent volume or local path
+        // Railway persistent storage approach
         if (process.env.RAILWAY_ENVIRONMENT) {
-            this.dbPath = '/data/dragonball.db';
+            // Use the mounted volume path
+            this.dbPath = process.env.RAILWAY_VOLUME_MOUNT_PATH 
+                ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'dragonball.db')
+                : '/data/dragonball.db';
         } else {
             this.dbPath = path.join(__dirname, '../../database/dragonball.db');
         }
@@ -15,16 +18,25 @@ class Database {
 
     async init() {
         return new Promise((resolve, reject) => {
+            console.log('🗄️  Database initialization starting...');
+            console.log('📍 Database path:', this.dbPath);
+            console.log('🌐 Environment:', process.env.RAILWAY_ENVIRONMENT ? 'Railway' : 'Local');
+            
             // Ensure database directory exists
             const dbDir = path.dirname(this.dbPath);
+            console.log('📁 Database directory:', dbDir);
+            
             if (!fs.existsSync(dbDir)) {
+                console.log('📂 Creating database directory...');
                 fs.mkdirSync(dbDir, { recursive: true });
-                console.log('Created database directory:', dbDir);
+                console.log('✅ Created database directory:', dbDir);
+            } else {
+                console.log('✅ Database directory exists');
             }
 
             this.db = new sqlite3.Database(this.dbPath, (err) => {
                 if (err) {
-                    console.error('Error opening database:', err);
+                    console.error('❌ Error opening database:', err);
                     reject(err);
                     return;
                 }

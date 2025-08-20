@@ -5,13 +5,10 @@ builder = "NIXPACKS"
 startCommand = "npm start"
 healthcheckPath = "/"
 restartPolicyType = "always"
+volumeMounts = [
+  { source = "dragonball_data", target = "/data" }
+]
 
 [environments.production.variables]
 NODE_ENV = "production"
-
-# Add persistent volume for SQLite database
-[[services]]
-name = "dragon-ball-finality"
-
-[services.volumes]
-data = "/data"
+RAILWAY_VOLUME_MOUNT_PATH = "/data"
