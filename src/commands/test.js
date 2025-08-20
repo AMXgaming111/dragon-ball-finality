@@ -13,9 +13,21 @@ module.exports = {
             if (database && database.dbPath) {
                 dbInfo = `Path: ${database.dbPath}`;
                 try {
-                    // Test database connection
+                    // Test database connection and get detailed info
                     const result = await database.all('SELECT COUNT(*) as count FROM characters');
                     characterCount = result[0]?.count || 0;
+                    
+                    // Check what tables exist
+                    const tables = await database.all("SELECT name FROM sqlite_master WHERE type='table'");
+                    const tableNames = tables.map(t => t.name).join(', ');
+                    dbInfo += `\nTables: ${tableNames}`;
+                    
+                    // Get sample character data if any exists
+                    if (characterCount > 0) {
+                        const sampleChar = await database.get('SELECT name, owner_id, race FROM characters LIMIT 1');
+                        dbInfo += `\nSample: ${sampleChar?.name} (${sampleChar?.race})`;
+                    }
+                    
                 } catch (error) {
                     dbError = error.message;
                     dbInfo += `\nDB Error: ${error.message}`;
