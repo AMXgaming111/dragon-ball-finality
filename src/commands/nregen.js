@@ -22,8 +22,8 @@ module.exports = {
                 return message.reply('Your character doesn\'t have the Namekian Physiology racial ability.');
             }
 
-            // Calculate minimum ki cost for 10% healing
-            const minKiCost = calculateKiCost(5, userData.control);
+            // Flat ki cost for 10% healing (3 ki points per 10%)
+            const minKiCost = 3;
             const maxHealth = userData.base_pl * userData.endurance;
             const currentHealth = userData.current_health || maxHealth;
 
@@ -33,10 +33,10 @@ module.exports = {
                 .setDescription('How much ki would you like to spend on regeneration?')
                 .addFields(
                     { name: 'Current Health', value: `${currentHealth}/${maxHealth}`, inline: true },
-                    { name: 'Minimum Cost (10% heal)', value: `${minKiCost} ki`, inline: true },
+                    { name: 'Cost per 10% heal', value: `${minKiCost} ki`, inline: true },
                     { name: 'Current Ki', value: `${userData.current_ki || userData.endurance}/${userData.endurance}`, inline: true }
                 )
-                .setFooter({ text: 'Type the amount of ki you want to spend (must be a multiple of the minimum cost)' });
+                .setFooter({ text: 'Type the amount of ki you want to spend (must be a multiple of 3)' });
 
             await message.reply({ embeds: [embed] });
 
@@ -55,6 +55,11 @@ module.exports = {
             const kiInput = parseInt(collected.first().content);
             if (isNaN(kiInput) || kiInput < minKiCost) {
                 return message.reply(`Invalid ki amount! Must be at least ${minKiCost} ki.`);
+            }
+
+            // Check if ki input is a multiple of 3
+            if (kiInput % 3 !== 0) {
+                return message.reply('Ki amount must be a multiple of 3!');
             }
 
             // Check if user has enough ki
