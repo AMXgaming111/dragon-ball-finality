@@ -5,10 +5,6 @@ builder = "NIXPACKS"
 startCommand = "npm start"
 healthcheckPath = "/"
 restartPolicyType = "always"
-volumeMounts = [
-  { source = "dragonball_data", target = "/data" }
-]
 
 [environments.production.variables]
 NODE_ENV = "production"
-RAILWAY_VOLUME_MOUNT_PATH = "/data"

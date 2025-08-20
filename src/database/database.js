@@ -4,16 +4,14 @@ const fs = require('fs');
 
 class Database {
     constructor() {
-        // Railway persistent storage approach
+        // Simple Railway approach - use app directory which should be more persistent than /tmp
         if (process.env.RAILWAY_ENVIRONMENT) {
-            // Use the mounted volume path
-            this.dbPath = process.env.RAILWAY_VOLUME_MOUNT_PATH 
-                ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'dragonball.db')
-                : '/data/dragonball.db';
+            this.dbPath = '/app/dragonball.db';
         } else {
             this.dbPath = path.join(__dirname, '../../database/dragonball.db');
         }
         this.db = null;
+        console.log('🗄️  Database path:', this.dbPath);
     }
 
     async init() {

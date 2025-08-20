@@ -6,21 +6,24 @@ module.exports = {
         .setDescription('Enhanced test command to verify bot functionality and debug persistence'),
 
     async execute(interaction) {
-        await interaction.deferReply();
-
         try {
+            await interaction.deferReply();
+
             // Get database info
             const db = interaction.client.database;
             let dbInfo = 'Database not initialized';
             let characterCount = 0;
+            let dbError = null;
             
             if (db && db.dbPath) {
                 dbInfo = `Path: ${db.dbPath}`;
                 try {
-                    const characters = await db.all('SELECT COUNT(*) as count FROM characters');
-                    characterCount = characters[0]?.count || 0;
+                    // Test database connection
+                    const result = await db.all('SELECT COUNT(*) as count FROM characters');
+                    characterCount = result[0]?.count || 0;
                 } catch (error) {
-                    dbInfo += `\nError: ${error.message}`;
+                    dbError = error.message;
+                    dbInfo += `\nDB Error: ${error.message}`;
                 }
             }
 
@@ -31,12 +34,12 @@ module.exports = {
                     { name: '🤖 Bot Status', value: 'Online and functional ✅', inline: true },
                     { name: '🌐 Environment', value: process.env.RAILWAY_ENVIRONMENT ? 'Railway 🚂' : 'Local 💻', inline: true },
                     { name: '📅 Timestamp', value: new Date().toISOString(), inline: true },
-                    { name: '🗄️ Database Info', value: dbInfo, inline: false },
+                    { name: '🗄️ Database Info', value: dbInfo.substring(0, 1000), inline: false },
                     { name: '👥 Character Count', value: characterCount.toString(), inline: true },
                     { name: '🔧 Volume Path', value: process.env.RAILWAY_VOLUME_MOUNT_PATH || 'Not set', inline: true },
                     { name: '🆔 Test ID', value: `TEST-${Date.now()}`, inline: true }
                 )
-                .setColor(0x00ff00)
+                .setColor(dbError ? 0xff0000 : 0x00ff00)
                 .setTimestamp()
                 .setFooter({ text: 'Persistence Test - Check if this survives redeployment!' });
 
@@ -46,6 +49,7 @@ module.exports = {
             console.log('🧪 TEST COMMAND EXECUTED:');
             console.log('📍 Database Path:', db?.dbPath);
             console.log('👥 Character Count:', characterCount);
+            console.log('❌ Database Error:', dbError);
             console.log('🌐 Environment Variables:');
             console.log('  - RAILWAY_ENVIRONMENT:', process.env.RAILWAY_ENVIRONMENT);
             console.log('  - RAILWAY_VOLUME_MOUNT_PATH:', process.env.RAILWAY_VOLUME_MOUNT_PATH);
@@ -54,13 +58,21 @@ module.exports = {
         } catch (error) {
             console.error('❌ Test command error:', error);
             
-            const errorEmbed = new EmbedBuilder()
-                .setTitle('❌ Test Command Error')
-                .setDescription(`Error occurred: ${error.message}`)
-                .setColor(0xff0000)
-                .setTimestamp();
+            try {
+                const errorEmbed = new EmbedBuilder()
+                    .setTitle('❌ Test Command Error')
+                    .setDescription(`Error occurred: ${error.message}`)
+                    .setColor(0xff0000)
+                    .setTimestamp();
 
-            await interaction.editReply({ embeds: [errorEmbed] });
+                if (interaction.deferred) {
+                    await interaction.editReply({ embeds: [errorEmbed] });
+                } else {
+                    await interaction.reply({ embeds: [errorEmbed] });
+                }
+            } catch (replyError) {
+                console.error('❌ Failed to send error message:', replyError);
+            }
         }
     },
 };
