@@ -339,6 +339,9 @@ class Database {
             let paramIndex = 1;
             pgQuery = pgQuery.replace(/\?/g, () => `$${paramIndex++}`);
             
+            // Convert boolean comparisons for PostgreSQL
+            pgQuery = this.convertBooleanComparisons(pgQuery);
+            
             // For INSERT statements, add RETURNING id only for tables that have an id column
             if (pgQuery.trim().toUpperCase().startsWith('INSERT INTO') && 
                 !pgQuery.toUpperCase().includes('RETURNING') &&
@@ -387,6 +390,9 @@ class Database {
             let paramIndex = 1;
             pgQuery = pgQuery.replace(/\?/g, () => `$${paramIndex++}`);
             
+            // Convert boolean comparisons for PostgreSQL
+            pgQuery = this.convertBooleanComparisons(pgQuery);
+            
             return new Promise((resolve, reject) => {
                 this.pool.query(pgQuery, params, (err, result) => {
                     if (err) {
@@ -415,6 +421,9 @@ class Database {
             let pgQuery = query;
             let paramIndex = 1;
             pgQuery = pgQuery.replace(/\?/g, () => `$${paramIndex++}`);
+            
+            // Convert boolean comparisons for PostgreSQL
+            pgQuery = this.convertBooleanComparisons(pgQuery);
             
             return new Promise((resolve, reject) => {
                 this.pool.query(pgQuery, params, (err, result) => {
@@ -477,6 +486,17 @@ class Database {
         } else {
             return baseQuery.replace(/is_active\s*=\s*(TRUE|FALSE)/gi, `is_active = ${booleanValue ? 1 : 0}`);
         }
+    }
+
+    // Convert boolean comparisons for PostgreSQL compatibility
+    convertBooleanComparisons(query) {
+        if (!this.usePostgres) return query;
+        
+        // Convert is_active = 1 to is_active = TRUE
+        // Convert is_active = 0 to is_active = FALSE
+        return query
+            .replace(/\bis_active\s*=\s*1\b/gi, 'is_active = TRUE')
+            .replace(/\bis_active\s*=\s*0\b/gi, 'is_active = FALSE');
     }
 
     async getUser(userId) {
