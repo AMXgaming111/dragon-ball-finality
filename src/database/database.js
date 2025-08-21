@@ -342,6 +342,9 @@ class Database {
             // Convert boolean comparisons for PostgreSQL
             pgQuery = this.convertBooleanComparisons(pgQuery);
             
+            // Convert datetime functions for PostgreSQL
+            pgQuery = this.convertDateTimeFunctions(pgQuery);
+            
             // For INSERT statements, add RETURNING id only for tables that have an id column
             if (pgQuery.trim().toUpperCase().startsWith('INSERT INTO') && 
                 !pgQuery.toUpperCase().includes('RETURNING') &&
@@ -393,6 +396,9 @@ class Database {
             // Convert boolean comparisons for PostgreSQL
             pgQuery = this.convertBooleanComparisons(pgQuery);
             
+            // Convert datetime functions for PostgreSQL
+            pgQuery = this.convertDateTimeFunctions(pgQuery);
+            
             return new Promise((resolve, reject) => {
                 this.pool.query(pgQuery, params, (err, result) => {
                     if (err) {
@@ -424,6 +430,9 @@ class Database {
             
             // Convert boolean comparisons for PostgreSQL
             pgQuery = this.convertBooleanComparisons(pgQuery);
+            
+            // Convert datetime functions for PostgreSQL
+            pgQuery = this.convertDateTimeFunctions(pgQuery);
             
             return new Promise((resolve, reject) => {
                 this.pool.query(pgQuery, params, (err, result) => {
@@ -497,6 +506,16 @@ class Database {
         return query
             .replace(/\bis_active\s*=\s*1\b/gi, 'is_active = TRUE')
             .replace(/\bis_active\s*=\s*0\b/gi, 'is_active = FALSE');
+    }
+
+    // Convert datetime functions for PostgreSQL compatibility
+    convertDateTimeFunctions(query) {
+        if (!this.usePostgres) return query;
+        
+        // Convert SQLite datetime functions to PostgreSQL equivalents
+        return query
+            .replace(/datetime\(\s*'now'\s*\)/gi, 'NOW()')
+            .replace(/datetime\(\s*([^)]+)\s*\)/gi, '$1');
     }
 
     async getUser(userId) {
