@@ -450,9 +450,8 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
                 // Enhanced regeneration - 20% health
                 healthChange += Math.floor(maxHealth * 0.2);
                 
-                // Apply ki cost for enhanced regeneration
-                const { calculateKiCost } = require('../utils/calculations');
-                const kiCost = calculateKiCost(3, character.control);
+                // Apply flat ki cost for enhanced regeneration
+                const kiCost = 3;
                 kiChange -= kiCost;
             } else {
                 // Basic regeneration - 10% health

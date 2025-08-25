@@ -1,5 +1,4 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateKiCost } = require('../utils/calculations');
 
 module.exports = {
     name: 'mregen',
@@ -53,8 +52,8 @@ module.exports = {
                 await database.run(query, [userData.active_character_id]);
             }
 
-            // Calculate ki cost for enhanced regeneration
-            const kiCost = calculateKiCost(3, userData.control);
+            // Flat ki cost for enhanced regeneration
+            const kiCost = 3;
 
             const embed = new EmbedBuilder()
                 .setColor(isActivating ? 0xe91e63 : 0x95a5a6)
