@@ -110,8 +110,12 @@ async function advanceTurnFromInteraction(interaction, database) {
     console.log('=== ADVANCE TURN DEBUG: Channel ID:', channelId);
     
     // Check if turn order exists
+    const paramPlaceholder = database.usePostgres ? '$1' : '?';
+    const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
+    const paramPlaceholder3 = database.usePostgres ? '$3' : '?';
+    
     const turnOrder = await database.get(
-        'SELECT * FROM turn_orders WHERE channel_id = ?',
+        `SELECT * FROM turn_orders WHERE channel_id = ${paramPlaceholder}`,
         [channelId]
     );
     console.log('=== ADVANCE TURN DEBUG: Turn order found:', !!turnOrder);
@@ -149,7 +153,7 @@ async function advanceTurnFromInteraction(interaction, database) {
     // Update database
     console.log('=== ADVANCE TURN DEBUG: Updating database');
     await database.run(
-        'UPDATE turn_orders SET current_turn = ?, current_round = ? WHERE channel_id = ?',
+        `UPDATE turn_orders SET current_turn = ${paramPlaceholder}, current_round = ${paramPlaceholder2} WHERE channel_id = ${paramPlaceholder3}`,
         [currentTurn, currentRound, channelId]
     );
     console.log('=== ADVANCE TURN DEBUG: Database updated');
@@ -198,9 +202,13 @@ async function applyEndOfTurnEffects(characterId, database) {
     
     let character;
     try {
-        character = await database.get(`
+        const groupConcatFunction = database.usePostgres ? 'STRING_AGG' : 'GROUP_CONCAT';
+        const paramPlaceholder = database.usePostgres ? '$1' : '?';
+        const groupConcatSeparator = database.usePostgres ? "STRING_AGG(cr.racial_tag, ',')" : 'GROUP_CONCAT(cr.racial_tag)';
+        
+        const query = database.usePostgres ? `
             SELECT c.*, 
-                   GROUP_CONCAT(cr.racial_tag) as racials,
+                   ${groupConcatSeparator} as racials,
                    f.name as form_name, 
                    f.ki_drain, f.health_drain, f.strength_modifier, f.defense_modifier, 
                    f.agility_modifier, f.endurance_modifier, f.control_modifier, f.pl_modifier
@@ -208,9 +216,23 @@ async function applyEndOfTurnEffects(characterId, database) {
             LEFT JOIN character_racials cr ON c.id = cr.character_id
             LEFT JOIN character_forms cf ON c.id = cf.character_id AND cf.is_active = 1
             LEFT JOIN forms f ON cf.form_key = f.form_key
-            WHERE c.id = ?
+            WHERE c.id = ${paramPlaceholder}
+            GROUP BY c.id, c.character_name, c.owner_id, c.race, c.base_pl, c.strength, c.defense, c.agility, c.endurance, c.control, c.current_health, c.current_ki, c.release_percentage, c.image_url, c.ki_control, c.magic_mastery, c.primary_affinity, c.secondary_affinities, c.created_at, f.name, f.ki_drain, f.health_drain, f.strength_modifier, f.defense_modifier, f.agility_modifier, f.endurance_modifier, f.control_modifier, f.pl_modifier
+        ` : `
+            SELECT c.*, 
+                   ${groupConcatSeparator} as racials,
+                   f.name as form_name, 
+                   f.ki_drain, f.health_drain, f.strength_modifier, f.defense_modifier, 
+                   f.agility_modifier, f.endurance_modifier, f.control_modifier, f.pl_modifier
+            FROM characters c
+            LEFT JOIN character_racials cr ON c.id = cr.character_id
+            LEFT JOIN character_forms cf ON c.id = cf.character_id AND cf.is_active = 1
+            LEFT JOIN forms f ON cf.form_key = f.form_key
+            WHERE c.id = ${paramPlaceholder}
             GROUP BY c.id
-        `, [characterId]);
+        `;
+        
+        character = await database.get(query, [characterId]);
         
         console.log('=== APPLY END TURN EFFECTS DEBUG: Character query completed, result:', character ? 'found' : 'null');
         
@@ -231,22 +253,25 @@ async function applyEndOfTurnEffects(characterId, database) {
     const racials = character.racials ? character.racials.split(',') : [];
 
     // Check for Zenkai advancement if in combat
+    const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
+    const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
+    
     const turnOrder = await database.get(
-        'SELECT * FROM turn_orders WHERE participants LIKE ? AND channel_id IS NOT NULL',
+        `SELECT * FROM turn_orders WHERE participants LIKE ${paramPlaceholder1} AND channel_id IS NOT NULL`,
         [`%"characterId":${characterId}%`]
     );
 
     if (turnOrder) {
         // Check for Zenkai racial
         const zenkaiRacial = await database.get(
-            'SELECT * FROM character_racials WHERE character_id = ? AND racial_tag = ?',
+            `SELECT * FROM character_racials WHERE character_id = ${paramPlaceholder1} AND racial_tag = ${paramPlaceholder2}`,
             [characterId, 'zenkai']
         );
 
         if (zenkaiRacial) {
             // Get current bonuses and last attacked target PL
             const combatState = await database.get(
-                'SELECT * FROM combat_state WHERE character_id = ? AND channel_id = ?',
+                `SELECT * FROM combat_state WHERE character_id = ${paramPlaceholder1} AND channel_id = ${paramPlaceholder2}`,
                 [characterId, turnOrder.channel_id]
             );
 
@@ -261,7 +286,7 @@ async function applyEndOfTurnEffects(characterId, database) {
                 // Check for Arcosian Resilience
                 const hasArcosianResilience = await database.get(`
                     SELECT is_active FROM character_racials 
-                    WHERE character_id = ? AND racial_tag = 'aresist' AND is_active = 1
+                    WHERE character_id = ${paramPlaceholder1} AND racial_tag = 'aresist' AND is_active = 1
                 `, [characterId]);
 
                 const charEffectivePL = calculateEffectivePL(
@@ -280,8 +305,9 @@ async function applyEndOfTurnEffects(characterId, database) {
                     const newZenkaiBonus = (bonuses.zenkaiBonus || 0) + zenkaiGain;
                     
                     // Update combat state
+                    const paramPlaceholder3 = database.usePostgres ? '$3' : '?';
                     await database.run(
-                        'UPDATE combat_state SET zenkai_bonus = ? WHERE character_id = ? AND channel_id = ?',
+                        `UPDATE combat_state SET zenkai_bonus = ${paramPlaceholder1} WHERE character_id = ${paramPlaceholder2} AND channel_id = ${paramPlaceholder3}`,
                         [newZenkaiBonus, characterId, turnOrder.channel_id]
                     );
 
@@ -296,7 +322,7 @@ async function applyEndOfTurnEffects(characterId, database) {
         // Majin Regeneration
         const hasEnhancedRegen = await database.get(`
             SELECT * FROM character_racials 
-            WHERE character_id = ? AND racial_tag = 'mregen_enhanced' AND is_active = 1
+            WHERE character_id = ${paramPlaceholder1} AND racial_tag = 'mregen_enhanced' AND is_active = 1
         `, [characterId]);
         
         const maxHealth = character.base_pl * character.endurance;
@@ -321,7 +347,7 @@ async function applyEndOfTurnEffects(characterId, database) {
     if (racials.includes('ngiant')) {
         const giantForm = await database.get(`
             SELECT * FROM character_racials 
-            WHERE character_id = ? AND racial_tag = 'ngiant' AND is_active = 1
+            WHERE character_id = ${paramPlaceholder1} AND racial_tag = 'ngiant' AND is_active = 1
         `, [characterId]);
         
         if (giantForm) {
@@ -357,7 +383,7 @@ async function applyEndOfTurnEffects(characterId, database) {
         const newHealth = Math.min(maxHealth, currentHealth + healthChange); // Cap at max health
         
         await database.run(
-            'UPDATE characters SET current_health = ? WHERE id = ?',
+            `UPDATE characters SET current_health = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
             [newHealth, characterId]
         );
     }
@@ -367,7 +393,7 @@ async function applyEndOfTurnEffects(characterId, database) {
         const newKi = Math.max(0, Math.min(character.endurance, currentKi + kiChange));
         
         await database.run(
-            'UPDATE characters SET current_ki = ? WHERE id = ?',
+            `UPDATE characters SET current_ki = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
             [newKi, characterId]
         );
     }
