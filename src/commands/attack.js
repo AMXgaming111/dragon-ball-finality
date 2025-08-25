@@ -12,6 +12,7 @@ const {
     calculateBlowback,
     getCombatBonuses,
     getCurrentKiCap,
+    generateKiBar,
     calculateMaxHealthForCharacter,
     addTechniqueEffect,
     getTechniqueEffects,
@@ -962,7 +963,7 @@ async function handleMagicAttack(interaction, attackerData, targetData, attacker
 // Technique Handlers
 
 async function handleClearMind(interaction, attackerData, targetData, database) {
-    // Clear Mind - +30 Control until end of next turn
+    // Clear Mind - +30 Control until end of next turn (FREE)
     await addTechniqueEffect(
         database, 
         attackerData.active_character_id, 
@@ -974,17 +975,23 @@ async function handleClearMind(interaction, attackerData, targetData, database) 
         2 // Lasts until end of next turn (current turn + 1 more)
     );
 
+    // Get updated ki information for display
+    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const maxKi = attackerData.endurance;
+    const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
+    const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
+
     const embed = new EmbedBuilder()
         .setColor(0x3498db)
         .setTitle('🧘 Clear Mind')
-        .setDescription(`**${attackerData.name}** clears their mind and focuses!\n\n+30 Control until the end of their next turn.`)
+        .setDescription(`**${attackerData.name}** clears their mind and focuses!\n\n+30 Control until the end of their next turn.\n\n${kiBar}\n${currentKi}/${maxKi} Ki`)
         .setFooter({ text: 'This effect will automatically be applied to rolls.' });
 
     await interaction.editReply({ embeds: [embed], components: [] });
 }
 
 async function handleGuard(interaction, attackerData, targetData, database) {
-    // Guard - 20% damage reduction until next turn
+    // Guard - 20% damage reduction until next turn (FREE)
     await addTechniqueEffect(
         database, 
         attackerData.active_character_id, 
@@ -996,17 +1003,23 @@ async function handleGuard(interaction, attackerData, targetData, database) {
         1 // Lasts until start of next turn
     );
 
+    // Get ki information for display
+    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const maxKi = attackerData.endurance;
+    const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
+    const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
+
     const embed = new EmbedBuilder()
         .setColor(0x2ecc71)
         .setTitle('🛡️ Guard')
-        .setDescription(`**${attackerData.name}** takes a defensive stance!\n\nAll incoming damage reduced by 20% until the start of their next turn.`)
+        .setDescription(`**${attackerData.name}** takes a defensive stance!\n\nAll incoming damage reduced by 20% until the start of their next turn.\n\n${kiBar}\n${currentKi}/${maxKi} Ki`)
         .setFooter({ text: 'This effect will automatically be applied to incoming attacks.' });
 
     await interaction.editReply({ embeds: [embed], components: [] });
 }
 
 async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
-    // Heavy Blow - Normal attack + agility debuff if damage dealt
+    // Heavy Blow - Normal attack + agility debuff if damage dealt (FREE)
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
     
@@ -1015,10 +1028,16 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
 
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
+    // Get ki information for display
+    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const maxKi = attackerData.endurance;
+    const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
+    const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
+
     const embed = new EmbedBuilder()
         .setColor(0xe74c3c)
         .setTitle('💥 Heavy Blow')
-        .setDescription(`**${attackerData.name}** throws a heavy blow at **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If damage is dealt, target gets -20% agility until start of your next turn.`)
+        .setDescription(`**${attackerData.name}** throws a heavy blow at **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If damage is dealt, target gets -20% agility until start of your next turn.\n\n${kiBar}\n${currentKi}/${maxKi} Ki`)
         .addFields(
             { name: 'Attack Damage', value: damage.toString(), inline: true },
             { name: 'Accuracy', value: accuracy.toString(), inline: true },
@@ -1055,7 +1074,7 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
 }
 
 async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
-    // Feint - Attack with dodge penalty
+    // Feint - Attack with dodge penalty (FREE)
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
     
@@ -1064,10 +1083,16 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
 
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
+    // Get ki information for display
+    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const maxKi = attackerData.endurance;
+    const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
+    const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
+
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
         .setTitle('🎭 Feint')
-        .setDescription(`**${attackerData.name}** attempts a tricky feint against **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If target attempts to dodge, their agility roll gets -0.5x penalty.`)
+        .setDescription(`**${attackerData.name}** attempts a tricky feint against **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If target attempts to dodge, their agility roll gets -0.5x penalty.\n\n${kiBar}\n${currentKi}/${maxKi} Ki`)
         .addFields(
             { name: 'Attack Damage', value: damage.toString(), inline: true },
             { name: 'Accuracy', value: accuracy.toString(), inline: true },
@@ -1130,10 +1155,14 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
 
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
+    // Get ki information for display
+    const kiPercentage = Math.max(0, (newKi / attackerData.endurance) * 100);
+    const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
+
     const embed = new EmbedBuilder()
         .setColor(0x8e44ad)
         .setTitle('🎯 Weakpoint Strike')
-        .setDescription(`**${attackerData.name}** targets a weakpoint on **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If not fully blocked/dodged, deals 7% of max health (${actualDamage} damage) instead of normal calculation.`)
+        .setDescription(`**${attackerData.name}** targets a weakpoint on **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If not fully blocked/dodged, deals 7% of max health (${actualDamage} damage) instead of normal calculation.\n\n${kiBar}\n${newKi}/${attackerData.endurance} Ki`)
         .addFields(
             { name: 'Display Damage', value: `${displayDamage} (reduced strength)`, inline: true },
             { name: 'Actual Damage', value: `${actualDamage} (7% max health)`, inline: true },
@@ -1198,12 +1227,17 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
         [newKi, attackerData.active_character_id]
     );
 
+    // Generate ki bar for display
+    const maxKi = attackerData.endurance;
+    const kiPercentage = Math.max(0, (newKi / maxKi) * 100);
+    const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
+
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
     const embed = new EmbedBuilder()
         .setColor(0xe67e22)
         .setTitle('⚡ Double Strike')
-        .setDescription(`**${attackerData.name}** launches a rapid double strike at **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** Each missed dodge roll reduces damage by one damage dice.`)
+        .setDescription(`**${attackerData.name}** launches a rapid double strike at **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** Each missed dodge roll reduces damage by one damage dice.\n\n${kiBar}\n${newKi}/${maxKi} Ki`)
         .addFields(
             { name: 'Strike 1', value: `${damage1} (Acc: ${accuracy1})`, inline: true },
             { name: 'Strike 2', value: `${damage2} (Acc: ${accuracy2})`, inline: true },
@@ -1220,9 +1254,11 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
         damage1: damage1,
         damage2: damage2,
         accuracy1: accuracy1,
-        accuracy2: accuracy2
+        accuracy2: accuracy2,
+        totalDamage: totalDamage
     };
     
+    // For Double Strike, store as separate attacks that will be resolved together
     await storePendingAttack(
         database,
         interaction.channel.id,
@@ -1231,8 +1267,8 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
         attackerData.active_character_id,
         targetData.active_character_id,
         'technique',
-        totalDamage,
-        Math.max(accuracy1, accuracy2), // Use the higher accuracy for defense purposes
+        0, // Store 0 damage - actual damage calculated during resolution
+        0, // Store 0 accuracy - actual accuracy handled per strike
         attackData
     );
 
@@ -1279,10 +1315,14 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
         [newHealth, targetData.active_character_id]
     );
 
+    // Get ki information for display
+    const kiPercentage = Math.max(0, (newKi / attackerData.endurance) * 100);
+    const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
+
     const embed = new EmbedBuilder()
         .setColor(0x34495e)
         .setTitle('↩️ Counter Attack')
-        .setDescription(`**${attackerData.name}** counters **${targetData.name}**!\n\n*Counter attack hits for ${damage} damage!*`)
+        .setDescription(`**${attackerData.name}** counters **${targetData.name}**!\n\n*Counter attack hits for ${damage} damage!*\n\n${kiBar}\n${newKi}/${attackerData.endurance} Ki`)
         .addFields(
             { name: 'Damage Dealt', value: `${damage} (reduced strength)`, inline: true },
             { name: 'Target Health', value: `${newHealth}/${maxHealth}`, inline: true },
@@ -1321,10 +1361,14 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
 
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
+    // Get ki information for display
+    const kiPercentage = Math.max(0, (newKi / attackerData.endurance) * 100);
+    const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
+
     const embed = new EmbedBuilder()
         .setColor(0x9b59b6)
         .setTitle('🤏 Chokehold')
-        .setDescription(`**${attackerData.name}** attempts to grab **${targetData.name}** in a chokehold!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If damage is dealt, target loses 8% of their ki.`)
+        .setDescription(`**${attackerData.name}** attempts to grab **${targetData.name}** in a chokehold!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If damage is dealt, target loses 8% of their ki.\n\n${kiBar}\n${newKi}/${attackerData.endurance} Ki`)
         .addFields(
             { name: 'Attack Damage', value: damage.toString(), inline: true },
             { name: 'Accuracy', value: accuracy.toString(), inline: true },
@@ -1391,10 +1435,14 @@ async function handleGrab(interaction, attackerData, targetData, attackerEffecti
         1 // Until start of next turn
     );
 
+    // Get ki information for display
+    const kiPercentage = Math.max(0, (newKi / attackerData.endurance) * 100);
+    const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
+
     const embed = new EmbedBuilder()
         .setColor(0x16a085)
         .setTitle('🤲 Grab')
-        .setDescription(`**${attackerData.name}** grabs **${targetData.name}**!\n\n**Effect:** Until the beginning of your next turn, whenever ${targetData.name} tries to dodge, they must roll their Strength against yours first. If they fail, their dodge is unsuccessful regardless of agility roll.\n\n**Note:** This technique doesn't end your turn!`)
+        .setDescription(`**${attackerData.name}** grabs **${targetData.name}**!\n\n**Effect:** Until the beginning of your next turn, whenever ${targetData.name} tries to dodge, they must roll their Strength against yours first. If they fail, their dodge is unsuccessful regardless of agility roll.\n\n**Note:** This technique doesn't end your turn!\n\n${kiBar}\n${newKi}/${attackerData.endurance} Ki`)
         .addFields(
             { name: 'Your Strength', value: attackerData.strength.toString(), inline: true },
             { name: 'Target', value: targetData.name, inline: true },

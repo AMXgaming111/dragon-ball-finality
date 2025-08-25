@@ -2,6 +2,132 @@ const { EmbedBuilder } = require('discord.js');
 const { calculateMaxHealth, calculateMaxHealthForCharacter, generateHealthBar, generateKiBar, handleMajinMagic, getCombatBonuses } = require('./calculations');
 
 /**
+ * Resolve Double Strike technique with separate strike handling
+ */
+async function resolveDoubleStrike(database, pendingAttack, defenseType, defenseValue, dodgeValue = null) {
+    const attackData = pendingAttack.attack_data;
+    const { damage1, damage2, accuracy1, accuracy2 } = attackData;
+    
+    let strike1Result = {};
+    let strike2Result = {};
+    let totalFinalDamage = 0;
+    
+    // Resolve Strike 1
+    if (defenseType === 'dodge') {
+        if (dodgeValue > accuracy1) {
+            // Strike 1 dodged
+            strike1Result = {
+                accuracy: accuracy1,
+                dodge: dodgeValue,
+                hit: false,
+                damage: 0,
+                finalDamage: 0
+            };
+        } else {
+            // Strike 1 hits - apply pity block
+            const pityBlockMultiplier = 0.5 + (Math.random() * 0.1);
+            const pityBlockValue = Math.floor(defenseValue * pityBlockMultiplier);
+            const finalDamage1 = Math.max(0, damage1 - pityBlockValue);
+            totalFinalDamage += finalDamage1;
+            
+            strike1Result = {
+                accuracy: accuracy1,
+                dodge: dodgeValue,
+                hit: true,
+                damage: damage1,
+                pityBlock: pityBlockValue,
+                finalDamage: finalDamage1
+            };
+        }
+    } else { // block
+        const finalDamage1 = Math.max(0, damage1 - Math.floor(defenseValue / 2)); // Split block between strikes
+        totalFinalDamage += finalDamage1;
+        
+        strike1Result = {
+            accuracy: accuracy1,
+            hit: true,
+            damage: damage1,
+            block: Math.floor(defenseValue / 2),
+            finalDamage: finalDamage1
+        };
+    }
+    
+    // Resolve Strike 2
+    if (defenseType === 'dodge') {
+        if (dodgeValue > accuracy2) {
+            // Strike 2 dodged
+            strike2Result = {
+                accuracy: accuracy2,
+                dodge: dodgeValue,
+                hit: false,
+                damage: 0,
+                finalDamage: 0
+            };
+        } else {
+            // Strike 2 hits - apply pity block
+            const pityBlockMultiplier = 0.5 + (Math.random() * 0.1);
+            const pityBlockValue = Math.floor(defenseValue * pityBlockMultiplier);
+            const finalDamage2 = Math.max(0, damage2 - pityBlockValue);
+            totalFinalDamage += finalDamage2;
+            
+            strike2Result = {
+                accuracy: accuracy2,
+                dodge: dodgeValue,
+                hit: true,
+                damage: damage2,
+                pityBlock: pityBlockValue,
+                finalDamage: finalDamage2
+            };
+        }
+    } else { // block
+        const finalDamage2 = Math.max(0, damage2 - Math.floor(defenseValue / 2)); // Split block between strikes
+        totalFinalDamage += finalDamage2;
+        
+        strike2Result = {
+            accuracy: accuracy2,
+            hit: true,
+            damage: damage2,
+            block: Math.floor(defenseValue / 2),
+            finalDamage: finalDamage2
+        };
+    }
+    
+    // Apply total damage
+    if (totalFinalDamage > 0) {
+        const targetData = await database.getUserWithActiveCharacter(pendingAttack.target_user_id);
+        if (targetData) {
+            const maxHealth = await calculateMaxHealthForCharacter(
+                database, 
+                targetData.active_character_id, 
+                targetData.base_pl, 
+                targetData.endurance
+            );
+            const currentHealth = targetData.current_health || maxHealth;
+            const newHealth = Math.max(0, currentHealth - totalFinalDamage);
+            
+            await database.run(
+                'UPDATE characters SET current_health = ? WHERE id = ?',
+                [newHealth, targetData.active_character_id]
+            );
+
+            // Update ki cap based on new health percentage - automatically enforce cap
+            const { enforceKiCap } = require('./calculations');
+            await enforceKiCap(database, pendingAttack.target_character_id);
+        }
+    }
+    
+    return {
+        type: 'double_strike',
+        defenseType: defenseType,
+        strike1: strike1Result,
+        strike2: strike2Result,
+        totalDamage: damage1 + damage2,
+        finalDamage: totalFinalDamage,
+        success: totalFinalDamage < (damage1 + damage2) // Partial success if any damage reduced
+    };
+}
+
+/**
  * Store a pending attack in the database
  */
 async function storePendingAttack(database, channelId, attackerUserId, targetUserId, attackerCharacterId, targetCharacterId, attackType, damage, accuracy, attackData) {
@@ -56,6 +182,11 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
     const attackData = pendingAttack.attack_data;
     let finalDamage = 0;
     let combatResult = {};
+    
+    // Special handling for Double Strike technique
+    if (attackData && attackData.technique === 'double_strike') {
+        return resolveDoubleStrike(database, pendingAttack, defenseType, defenseValue, dodgeValue);
+    }
     
     if (defenseType === 'block') {
         // Block reduces damage
