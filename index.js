@@ -27,7 +27,10 @@ if (process.env.RAILWAY_ENVIRONMENT || process.env.PORT) {
     });
     
     app.listen(PORT, () => {
-        console.log(`🌐 Health check server running on port ${PORT}`);
+        console.log('🌐 Health check server running on port 8080');
+console.log('🔄 DEPLOYMENT TEST: End turn debugging enabled');
+
+// Keep alive endpoint for Railway
     });
 }
 
