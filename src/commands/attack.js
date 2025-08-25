@@ -1514,9 +1514,9 @@ async function addEndTurnButtons(interaction, embed, attackerData, database) {
 
         if (turnInteraction.customId === 'end_turn_yes') {
             const { advanceTurnFromInteraction } = require('../../helper_functions');
-            console.log('Attempting to advance turn for user:', turnInteraction.user.username);
+            console.log('=== TECHNIQUE END TURN DEBUG: Attempting to advance turn for user:', turnInteraction.user.username);
             await advanceTurnFromInteraction(turnInteraction, database);
-            console.log('Turn advancement completed successfully');
+            console.log('=== TECHNIQUE END TURN DEBUG: Turn advancement completed successfully');
         } else {
             // User chose not to end turn
             await turnInteraction.update({ 
