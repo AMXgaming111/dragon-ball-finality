@@ -12,7 +12,8 @@ const {
     calculateKiSpecialCost,
     getCombatBonuses,
     getCurrentKiCap,
-    generateHealthBar
+    generateHealthBar,
+    calculateMaxHealthForCharacter
 } = require('../utils/calculations');
 const { getPendingAttack, resolveCombat, createCombatResultEmbed, cleanupExpiredAttacks, addKiDisplay } = require('../utils/combat');
 const { autoManageTurnOrder, advanceTurnFromInteraction, applyEndOfTurnEffects } = require('../../helper_functions');
@@ -619,6 +620,36 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
                 { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true },
                 { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
             );
+    } else if (combatResult.type === 'double_strike') {
+        const strike1Hit = combatResult.strike1.hit;
+        const strike2Hit = combatResult.strike2.hit;
+        const totalHits = (strike1Hit ? 1 : 0) + (strike2Hit ? 1 : 0);
+        
+        if (totalHits === 0) {
+            // Both strikes dodged
+            defenseEmbed.setColor(0x3498db)
+                .setTitle('💨 Combat Result - Double Strike Completely Dodged')
+                .setDescription(`**${defenderData.name}** successfully dodged both strikes of **${attackerData.name}**'s ${pendingAttack.attack_type} attack!`)
+                .addFields(
+                    { name: 'Strike 1 Accuracy', value: combatResult.strike1.accuracy.toString(), inline: true },
+                    { name: 'Strike 2 Accuracy', value: combatResult.strike2.accuracy.toString(), inline: true },
+                    { name: 'Dodge Value', value: combatResult.strike1.dodge.toString(), inline: true },
+                    { name: 'Final Damage', value: '0', inline: true },
+                    { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
+                );
+        } else {
+            // Some strikes hit
+            defenseEmbed.setColor(0xe67e22)
+                .setTitle(`⚔️ Combat Result - Double Strike (${totalHits}/2 Hits)`)
+                .setDescription(`**${defenderData.name}** ${totalHits === 1 ? 'partially defended against' : 'failed to defend against'} **${attackerData.name}**'s ${pendingAttack.attack_type} attack!`)
+                .addFields(
+                    { name: 'Strike 1', value: `Acc: ${combatResult.strike1.accuracy} | ${strike1Hit ? `Hit for ${combatResult.strike1.finalDamage}` : 'Dodged'}`, inline: true },
+                    { name: 'Strike 2', value: `Acc: ${combatResult.strike2.accuracy} | ${strike2Hit ? `Hit for ${combatResult.strike2.finalDamage}` : 'Dodged'}`, inline: true },
+                    { name: 'Dodge Value', value: combatResult.strike1.dodge.toString(), inline: true },
+                    { name: 'Total Damage', value: combatResult.finalDamage.toString(), inline: true },
+                    { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
+                );
+        }
     } else {
         // Fallback for unexpected combat result types
         defenseEmbed.setColor(0x95a5a6)
@@ -631,20 +662,42 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     }
     
     // Add health information if damage was taken
-    if (combatResult.healthUpdate && combatResult.finalDamage > 0) {
-        const { newHealth, maxHealth } = combatResult.healthUpdate;
-        const healthPercentage = (newHealth / maxHealth) * 100;
-        const healthBar = generateHealthBar(healthPercentage);
+    if ((combatResult.healthUpdate && combatResult.finalDamage > 0) || 
+        (combatResult.type === 'double_strike' && combatResult.finalDamage > 0)) {
         
-        defenseEmbed.addFields({
-            name: `${defenderData.name}'s Health`,
-            value: `${healthBar}\n${newHealth}/${maxHealth} (${Math.round(healthPercentage)}%)`,
-            inline: false
-        });
+        let newHealth, maxHealth;
         
-        // Only show critical status if health is positive but below 20%
-        if (newHealth > 0 && healthPercentage < 20) {
-            defenseEmbed.addFields({ name: 'Status', value: '⚠️ **CRITICAL**', inline: false });
+        if (combatResult.healthUpdate) {
+            // Regular combat result with health update
+            ({ newHealth, maxHealth } = combatResult.healthUpdate);
+        } else {
+            // Double strike - need to fetch current health
+            const updatedDefenderData = await database.getUserWithActiveCharacter(defenderData.user_id);
+            if (updatedDefenderData) {
+                newHealth = updatedDefenderData.current_health;
+                maxHealth = await calculateMaxHealthForCharacter(
+                    database,
+                    defenderData.active_character_id,
+                    defenderData.base_pl,
+                    defenderData.endurance
+                );
+            }
+        }
+        
+        if (newHealth !== undefined && maxHealth !== undefined) {
+            const healthPercentage = (newHealth / maxHealth) * 100;
+            const healthBar = generateHealthBar(healthPercentage);
+            
+            defenseEmbed.addFields({
+                name: `${defenderData.name}'s Health`,
+                value: `${healthBar}\n${newHealth}/${maxHealth} (${Math.round(healthPercentage)}%)`,
+                inline: false
+            });
+            
+            // Only show critical status if health is positive but below 20%
+            if (newHealth > 0 && healthPercentage < 20) {
+                defenseEmbed.addFields({ name: 'Status', value: '⚠️ **CRITICAL**', inline: false });
+            }
         }
     }
 
