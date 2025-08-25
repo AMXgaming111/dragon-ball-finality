@@ -47,7 +47,7 @@ module.exports = {
             // Calculate current health and ki values
             let currentHealth = userData.current_health;
             let currentKi = userData.current_ki;
-            let maxHealth = await calculateMaxHealthForCharacter(userData.id);
+            let maxHealth = await calculateMaxHealthForCharacter(database, userData.active_character_id, userData.base_pl, userData.endurance);
             let maxKi = calculateMaxKi(userData.endurance);
 
             // Apply form modifiers if in a form
@@ -62,7 +62,7 @@ module.exports = {
                 }
                 
                 // Recalculate max health with form
-                maxHealth = await calculateMaxHealthForCharacter(userData.id, formMultiplier);
+                maxHealth = await calculateMaxHealthForCharacter(database, userData.active_character_id, userData.base_pl, userData.endurance, formMultiplier);
             }
 
             // Set default values if null

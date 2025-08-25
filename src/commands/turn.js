@@ -442,7 +442,7 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
             WHERE character_id = ? AND racial_tag = 'mregen_enhanced' AND is_active = 1
         `, [characterId]);
         
-        const maxHealth = await calculateMaxHealthForCharacter(characterId);
+        const maxHealth = await calculateMaxHealthForCharacter(database, characterId, character.base_pl, character.endurance);
         const currentHealth = character.current_health || maxHealth;
         
         if (currentHealth < maxHealth) {
@@ -561,7 +561,7 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
 
     // Apply changes
     if (healthChange !== 0) {
-        const maxHealth = await calculateMaxHealthForCharacter(characterId);
+        const maxHealth = await calculateMaxHealthForCharacter(database, characterId, character.base_pl, character.endurance);
         const currentHealth = character.current_health || maxHealth;
         const newHealth = Math.min(maxHealth, currentHealth + healthChange); // Cap at max health
         

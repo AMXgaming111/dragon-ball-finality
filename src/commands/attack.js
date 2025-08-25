@@ -719,7 +719,7 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     );
 
     if (blowbackDamage > 0) {
-        const maxHealth = await calculateMaxHealthForCharacter(attackerData.active_character_id);
+        const maxHealth = await calculateMaxHealthForCharacter(database, attackerData.active_character_id, attackerData.base_pl, attackerData.endurance);
         const currentHealth = attackerData.current_health || maxHealth;
         const newHealth = currentHealth - blowbackDamage;
         
