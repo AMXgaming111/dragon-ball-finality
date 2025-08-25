@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateKiCost, getCombatBonuses, calculateEffectivePL } = require('./src/utils/calculations');
+const { calculateKiCost, getCombatBonuses, calculateEffectivePL, decrementTechniqueEffects } = require('./src/utils/calculations');
 
 /**
  * Auto-manage turn order for combat - creates or adds participants as needed
@@ -338,6 +338,9 @@ async function applyEndOfTurnEffects(characterId, database) {
             [newKi, characterId]
         );
     }
+    
+    // Decrement technique effect durations at end of turn
+    await decrementTechniqueEffects(database, characterId, turnOrder ? turnOrder.channel_id : null);
 }
 
 module.exports = {

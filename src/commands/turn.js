@@ -195,9 +195,20 @@ async function removeFromTurnOrder(message, userMention, database) {
     }
 
     if (participants.length < 2) {
-        // End combat if less than 2 participants
+        // End combat if less than 2 participants - clear technique effects for remaining participants
+        try {
+            for (const participant of participants) {
+                await database.run(
+                    'DELETE FROM technique_effects WHERE character_id = ? AND channel_id = ?',
+                    [participant.characterId, channelId]
+                );
+            }
+        } catch (error) {
+            console.error('Error clearing technique effects:', error);
+        }
+        
         await database.run('DELETE FROM turn_orders WHERE channel_id = ?', [channelId]);
-        return message.reply('Turn order ended - not enough participants remaining.');
+        return message.reply('Turn order ended - not enough participants remaining. Technique effects cleared.');
     }
 
     // Adjust current turn if necessary
@@ -350,8 +361,14 @@ async function endTurnOrder(message, database) {
                 'UPDATE combat_state SET majin_magic_bonus = 0, zenkai_bonus = 0 WHERE character_id = ? AND channel_id = ?',
                 [participant.characterId, channelId]
             );
+            
+            // Clear all technique effects for this character in this channel
+            await database.run(
+                'DELETE FROM technique_effects WHERE character_id = ? AND channel_id = ?',
+                [participant.characterId, channelId]
+            );
         }
-        console.log('Cleared Majin Magic and Zenkai bonuses for all participants');
+        console.log('Cleared Majin Magic, Zenkai bonuses, and technique effects for all participants');
     } catch (error) {
         console.error('Error clearing combat bonuses:', error);
     }
@@ -362,7 +379,7 @@ async function endTurnOrder(message, database) {
     const embed = new EmbedBuilder()
         .setColor(0x95a5a6)
         .setTitle('🏁 Combat Ended')
-        .setDescription('Turn order has been ended.\n*Majin Magic and Zenkai bonuses have been cleared.*');
+        .setDescription('Turn order has been ended.\n*Majin Magic, Zenkai bonuses, and technique effects have been cleared.*');
 
     await message.reply({ embeds: [embed] });
 }
