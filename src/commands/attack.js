@@ -26,12 +26,13 @@ module.exports = {
     description: 'Attack another character',
     async execute(message, args, database) {
         if (args.length < 1) {
-            return message.reply('Usage: `!attack <@target>` or `!attack <modifiers> <@target>`\nModifiers: `a<multiplier>` (accuracy), `e<effort>` (1-5)\nAttack modifiers: Use `+<number>` for additive (physical), `*<number>` for multiplier (ki)');
+            return message.reply('Usage: `!attack <@target>` or `!attack <modifiers> <@target>`\nModifiers: `a+<number>` (agility bonus), `a*<number>` or `a<number>` (accuracy multiplier), `e<effort>` (1-5)\nAttack modifiers: Use `+<number>` for additive (physical), `*<number>` for multiplier (ki)');
         }
 
         // Parse arguments
         let targetMention;
         let accuracyMultiplier = 1;
+        let agilityModifier = 0; // Additive agility bonus
         let effort = 2; // Default normal effort
 
         // Find target user mention
@@ -44,9 +45,26 @@ module.exports = {
         // Parse modifiers
         args.forEach(arg => {
             if (arg.startsWith('a') && !arg.startsWith('<@')) {
-                const mult = parseFloat(arg.slice(1));
-                if (!isNaN(mult) && mult > 0) {
-                    accuracyMultiplier = mult;
+                const modifierPart = arg.slice(1); // Get everything after 'a'
+                
+                if (modifierPart.startsWith('+')) {
+                    // a+10 = +10 agility additive
+                    const agBonus = parseInt(modifierPart.slice(1));
+                    if (!isNaN(agBonus) && agBonus > 0) {
+                        agilityModifier = agBonus;
+                    }
+                } else if (modifierPart.startsWith('*')) {
+                    // a*2 = 2x accuracy multiplier
+                    const mult = parseFloat(modifierPart.slice(1));
+                    if (!isNaN(mult) && mult > 0) {
+                        accuracyMultiplier = mult;
+                    }
+                } else {
+                    // a2 = 2x accuracy multiplier (backward compatibility)
+                    const mult = parseFloat(modifierPart);
+                    if (!isNaN(mult) && mult > 0) {
+                        accuracyMultiplier = mult;
+                    }
                 }
             } else if (arg.startsWith('e')) {
                 const eff = parseInt(arg.slice(1));
@@ -174,16 +192,16 @@ module.exports = {
                 
                 // For now, we'll implement physical and ki attacks
                 if (attackType === 'magic') {
-                    await handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+                    await handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
                     return;
                 }
 
                 if (attackType === 'physical') {
-                    await handlePhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+                    await handlePhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
                 } else if (attackType === 'ki') {
-                    await handleKiAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+                    await handleKiAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
                 } else if (attackType === 'magic') {
-                    await handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+                    await handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
                 }
             });
 
@@ -207,7 +225,7 @@ module.exports = {
     }
 };
 
-async function handlePhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+async function handlePhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
     // Get effective stats including technique effects (like Clear Mind)
     const baseStats = {
         control: attackerData.control,
@@ -266,7 +284,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         if (buttonInteraction.customId === 'physical_attack') {
             await handleBasicPhysicalAttack(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database, maxAdditive, effectiveStats);
         } else if (buttonInteraction.customId === 'physical_technique') {
-            await handleTechniqueSelection(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            await handleTechniqueSelection(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
         }
     });
 
@@ -333,7 +351,7 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
 
     // Calculate damage and accuracy
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, additive, database, attackerData.active_character_id);
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
     
     // Apply effort and accuracy multiplier
     const damage = rollWithEffort(baseDamage, effort);
@@ -412,6 +430,15 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
             { name: 'Attack Type', value: isBasic ? 'Basic' : `+${additive}`, inline: true }
         )
         .setFooter({ text: 'Target must defend within 5 minutes or take full damage!' });
+
+    // Add modifier information if applicable
+    if (agilityModifier > 0) {
+        resultEmbed.addFields({ name: 'Agility Bonus', value: `+${agilityModifier}`, inline: true });
+    }
+    
+    if (accuracyMultiplier !== 1) {
+        resultEmbed.addFields({ name: 'Accuracy Multiplier', value: `×${accuracyMultiplier}`, inline: true });
+    }
 
     if (kiChange !== 0) {
         resultEmbed.addFields({ 
@@ -501,7 +528,7 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
     }
 }
 
-async function handleTechniqueSelection(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+async function handleTechniqueSelection(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
     const embed = new EmbedBuilder()
         .setColor(0x9b59b6)
         .setTitle('⚡ Common Techniques')
@@ -553,25 +580,25 @@ async function handleTechniqueSelection(interaction, attackerData, targetData, a
             await handleGuard(interaction, attackerData, targetData, database);
             break;
         case 'hblow':
-            await handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            await handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
             break;
         case 'feint':
-            await handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            await handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
             break;
         case 'wpoint':
-            await handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            await handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
             break;
         case 'dstrike':
-            await handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            await handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
             break;
         case 'counter':
-            await handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            await handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
             break;
         case 'chold':
-            await handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            await handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
             break;
         case 'grab':
-            await handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            await handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
             break;
         default:
             const errorEmbed = new EmbedBuilder()
@@ -582,7 +609,7 @@ async function handleTechniqueSelection(interaction, attackerData, targetData, a
     }
 }
 
-async function handleKiAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+async function handleKiAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
     // Get effective stats including technique effects (like Clear Mind)
     const baseStats = {
         control: attackerData.control,
@@ -696,7 +723,7 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
 
     // Calculate damage and accuracy
     const baseDamage = calculateKiAttack(attackerEffectivePL, multiplier);
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
     
     // Apply effort
     const damage = rollWithEffort(baseDamage, effort);
@@ -857,7 +884,7 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     }
 }
 
-async function handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+async function handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
     const embed = new EmbedBuilder()
         .setColor(0x9b59b6)
         .setTitle('✨ Magic Attack')
@@ -1018,10 +1045,10 @@ async function handleGuard(interaction, attackerData, targetData, database) {
     await interaction.editReply({ embeds: [embed], components: [] });
 }
 
-async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
     // Heavy Blow - Normal attack + agility debuff if damage dealt (FREE)
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
     
     const damage = rollWithEffort(baseDamage, effort);
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
@@ -1073,7 +1100,7 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
     await interaction.editReply({ embeds: [embed], components: [] });
 }
 
-async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
     // Feint - Attack with dodge penalty (FREE)
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
@@ -1124,7 +1151,7 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
     await interaction.editReply({ embeds: [embed], components: [] });
 }
 
-async function handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+async function handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
     // Check ki cost (4 ki, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     if (currentKi < 4) {
@@ -1197,7 +1224,7 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
     await interaction.editReply({ embeds: [embed], components: [] });
 }
 
-async function handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+async function handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
     // Check ki cost (4 ki, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     if (currentKi < 4) {
@@ -1275,7 +1302,7 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
     await interaction.editReply({ embeds: [embed], components: [] });
 }
 
-async function handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+async function handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
     // Check ki cost (4 ki, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     if (currentKi < 4) {
@@ -1334,7 +1361,7 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
     await interaction.editReply({ embeds: [embed], components: [] });
 }
 
-async function handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+async function handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
     // Check ki cost (4 ki, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     if (currentKi < 4) {
@@ -1405,7 +1432,7 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
     await interaction.editReply({ embeds: [embed], components: [] });
 }
 
-async function handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+async function handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
     // Check ki cost (4 ki, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     if (currentKi < 4) {
