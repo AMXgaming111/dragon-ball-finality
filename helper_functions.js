@@ -191,22 +191,40 @@ async function advanceTurnFromInteraction(interaction, database) {
  * Apply end-of-turn effects for a character (copied from turn.js for standalone use)
  */
 async function applyEndOfTurnEffects(characterId, database) {
+    console.log('=== APPLY END TURN EFFECTS DEBUG: Starting for character ID:', characterId);
+    
     // Get character with racials and forms
-    const character = await database.get(`
-        SELECT c.*, 
-               GROUP_CONCAT(cr.racial_tag) as racials,
-               f.name as form_name, 
-               f.ki_drain, f.health_drain, f.strength_modifier, f.defense_modifier, 
-               f.agility_modifier, f.endurance_modifier, f.control_modifier, f.pl_modifier
-        FROM characters c
-        LEFT JOIN character_racials cr ON c.id = cr.character_id
-        LEFT JOIN character_forms cf ON c.id = cf.character_id AND cf.is_active = 1
-        LEFT JOIN forms f ON cf.form_key = f.form_key
-        WHERE c.id = ?
-        GROUP BY c.id
-    `, [characterId]);
-
-    if (!character) return;
+    console.log('=== APPLY END TURN EFFECTS DEBUG: Fetching character data');
+    
+    let character;
+    try {
+        character = await database.get(`
+            SELECT c.*, 
+                   GROUP_CONCAT(cr.racial_tag) as racials,
+                   f.name as form_name, 
+                   f.ki_drain, f.health_drain, f.strength_modifier, f.defense_modifier, 
+                   f.agility_modifier, f.endurance_modifier, f.control_modifier, f.pl_modifier
+            FROM characters c
+            LEFT JOIN character_racials cr ON c.id = cr.character_id
+            LEFT JOIN character_forms cf ON c.id = cf.character_id AND cf.is_active = 1
+            LEFT JOIN forms f ON cf.form_key = f.form_key
+            WHERE c.id = ?
+            GROUP BY c.id
+        `, [characterId]);
+        
+        console.log('=== APPLY END TURN EFFECTS DEBUG: Character query completed, result:', character ? 'found' : 'null');
+        
+    } catch (error) {
+        console.error('=== APPLY END TURN EFFECTS DEBUG: Database error:', error);
+        return;
+    }
+    
+    if (!character) {
+        console.log('=== APPLY END TURN EFFECTS DEBUG: No character found, returning early');
+        return;
+    }
+    
+    console.log('=== APPLY END TURN EFFECTS DEBUG: Character name:', character.character_name);
 
     let healthChange = 0;
     let kiChange = 0;
