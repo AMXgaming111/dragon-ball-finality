@@ -1242,37 +1242,27 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
 
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
+    // Apply damage immediately since counter is unblockable/undodgeable
+    const maxHealth = await calculateMaxHealthForCharacter(database, targetData.active_character_id, targetData.base_pl, targetData.endurance);
+    const currentHealth = targetData.current_health || maxHealth;
+    const newHealth = Math.max(0, currentHealth - damage);
+    
+    await database.run(
+        'UPDATE characters SET current_health = ? WHERE id = ?',
+        [newHealth, targetData.active_character_id]
+    );
+
     const embed = new EmbedBuilder()
         .setColor(0x34495e)
         .setTitle('↩️ Counter Attack')
-        .setDescription(`**${attackerData.name}** counters **${targetData.name}**!\n\n*This attack cannot be blocked or dodged!*`)
+        .setDescription(`**${attackerData.name}** counters **${targetData.name}**!\n\n*Counter attack hits for ${damage} damage!*`)
         .addFields(
-            { name: 'Attack Damage', value: `${damage} (reduced)`, inline: true },
-            { name: 'Accuracy', value: accuracy.toString(), inline: true },
+            { name: 'Damage Dealt', value: `${damage} (reduced strength)`, inline: true },
+            { name: 'Target Health', value: `${newHealth}/${maxHealth}`, inline: true },
             { name: 'Ki Cost', value: '4 ki', inline: true },
             { name: 'Special Effect', value: 'Unblockable & Undodgeable', inline: false }
         )
         .setFooter({ text: 'Counter attacks cannot be defended against!' });
-
-    // Store pending attack with technique data
-    const attackData = {
-        technique: 'counter',
-        effort: effort,
-        accuracyMultiplier: accuracyMultiplier
-    };
-    
-    await storePendingAttack(
-        database,
-        interaction.channel.id,
-        interaction.user.id,
-        targetData.owner_id,
-        attackerData.active_character_id,
-        targetData.active_character_id,
-        'technique',
-        damage,
-        accuracy,
-        attackData
-    );
 
     await interaction.editReply({ embeds: [embed], components: [] });
 }

@@ -414,9 +414,10 @@ async function transferTurnOrder(message, channelMention, database) {
 
 async function applyEndOfTurnEffects(characterId, database, channelId) {
     // Get character with racials and forms
+    const groupConcatFunction = database.usePostgres ? 'string_agg' : 'GROUP_CONCAT';
     const character = await database.get(`
         SELECT c.*, 
-               GROUP_CONCAT(cr.racial_tag) as racials,
+               ${groupConcatFunction}(cr.racial_tag${database.usePostgres ? ", ','" : ''}) as racials,
                f.name as form_name, 
                f.ki_drain, f.health_drain, f.strength_modifier, f.defense_modifier, 
                f.agility_modifier, f.endurance_modifier, f.control_modifier, f.pl_modifier

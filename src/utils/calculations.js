@@ -731,10 +731,16 @@ async function calculateEffectiveStats(database, characterId, channelId, baseSta
     
     let effectiveStats = { ...baseStats };
     
+    // Ensure all stats exist with default values
+    if (!effectiveStats.control) effectiveStats.control = baseStats.control || 0;
+    if (!effectiveStats.strength) effectiveStats.strength = baseStats.strength || 0;
+    if (!effectiveStats.agility) effectiveStats.agility = baseStats.agility || 0;
+    if (!effectiveStats.endurance) effectiveStats.endurance = baseStats.endurance || 0;
+    
     for (const effect of effects) {
         switch (effect.effect_type) {
             case 'control_bonus':
-                effectiveStats.control += parseInt(effect.effect_value);
+                effectiveStats.control = (effectiveStats.control || 0) + parseInt(effect.effect_value);
                 break;
             case 'strength_multiplier':
                 effectiveStats.strength *= parseFloat(effect.effect_value);
