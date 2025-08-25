@@ -426,7 +426,12 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
         LEFT JOIN character_forms cf ON c.id = cf.character_id AND cf.is_active = 1
         LEFT JOIN forms f ON cf.form_key = f.form_key
         WHERE c.id = ?
-        GROUP BY c.id
+        GROUP BY c.id, c.name, c.owner_id, c.race, c.base_pl, c.strength, c.defense, c.agility, 
+                 c.endurance, c.control, c.current_health, c.current_ki, c.release_percentage, 
+                 c.image_url, c.ki_control, c.magic_mastery, c.primary_affinity, c.secondary_affinities, 
+                 c.primary_specialization, c.secondary_specialization, c.created_at,
+                 f.name, f.ki_drain, f.health_drain, f.strength_modifier, f.defense_modifier, 
+                 f.agility_modifier, f.endurance_modifier, f.control_modifier, f.pl_modifier
     `, [characterId]);
 
     if (!character) return;
