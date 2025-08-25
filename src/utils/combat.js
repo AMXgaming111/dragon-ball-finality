@@ -125,8 +125,10 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
                 };
             }
             
+            const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
+            const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
             await database.run(
-                'UPDATE characters SET current_health = ? WHERE id = ?',
+                `UPDATE characters SET current_health = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
                 [newHealth, targetData.active_character_id]
             );
 
@@ -167,6 +169,95 @@ async function storePendingAttack(database, channelId, attackerUserId, targetUse
     `, [channelId, attackerUserId, targetUserId, attackerCharacterId, targetCharacterId, attackType, damage, accuracy, JSON.stringify(attackData), expiresAt.toISOString()]);
     
     return result.id;
+}
+
+/**
+ * Resolve Weakpoint technique combat
+ */
+async function resolveWeakpoint(database, pendingAttack, defenseType, defenseValue, dodgeValue = null) {
+    const attackData = pendingAttack.attack_data;
+    const { displayDamage, actualDamage, targetMaxHealth } = attackData;
+    
+    let finalDamage = 0;
+    let combatResult = {};
+    let fullyDefended = false;
+    
+    if (defenseType === 'block') {
+        // Check if the display damage is fully blocked
+        if (defenseValue >= displayDamage) {
+            fullyDefended = true;
+            finalDamage = 0; // Fully blocked, no damage
+        } else {
+            finalDamage = actualDamage; // Not fully blocked, apply 7% damage
+        }
+        
+        combatResult = {
+            type: 'weakpoint_block',
+            displayDamage: displayDamage,
+            actualDamage: actualDamage,
+            defenseValue: defenseValue,
+            finalDamage: finalDamage,
+            fullyDefended: fullyDefended,
+            success: fullyDefended
+        };
+    } else if (defenseType === 'dodge') {
+        if (dodgeValue > pendingAttack.accuracy) {
+            // Successful dodge - fully defended
+            fullyDefended = true;
+            finalDamage = 0;
+            combatResult = {
+                type: 'weakpoint_dodge',
+                attackAccuracy: pendingAttack.accuracy,
+                dodgeValue: dodgeValue,
+                displayDamage: displayDamage,
+                actualDamage: actualDamage,
+                finalDamage: 0,
+                fullyDefended: true,
+                success: true
+            };
+        } else {
+            // Failed dodge - not fully defended, apply 7% damage
+            finalDamage = actualDamage;
+            combatResult = {
+                type: 'weakpoint_failed_dodge',
+                attackAccuracy: pendingAttack.accuracy,
+                dodgeValue: dodgeValue,
+                displayDamage: displayDamage,
+                actualDamage: actualDamage,
+                finalDamage: finalDamage,
+                fullyDefended: false,
+                success: false
+            };
+        }
+    }
+    
+    // Apply damage to target if any
+    if (finalDamage > 0) {
+        const targetData = await database.getUserWithActiveCharacter(pendingAttack.target_user_id);
+        if (targetData) {
+            const currentHealth = targetData.current_health || targetMaxHealth;
+            const newHealth = currentHealth - finalDamage; // Allow negative health
+            
+            const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
+            const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
+            await database.run(
+                `UPDATE characters SET current_health = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
+                [newHealth, pendingAttack.target_character_id]
+            );
+            
+            // Handle Majin Magic for attacker if damage was dealt
+            if (finalDamage > 0) {
+                try {
+                    const healthPercentageLost = (finalDamage / targetMaxHealth) * 100;
+                    await handleMajinMagic(database, pendingAttack.attacker_character_id, healthPercentageLost, pendingAttack.channel_id);
+                } catch (error) {
+                    console.error('Error handling Majin Magic in weakpoint resolution:', error);
+                }
+            }
+        }
+    }
+    
+    return combatResult;
 }
 
 /**
@@ -222,6 +313,11 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
     // Special handling for Double Strike technique
     if (attackData && attackData.technique === 'double_strike') {
         return resolveDoubleStrike(database, pendingAttack, defenseType, defenseValue, dodgeValue);
+    }
+    
+    // Special handling for Weakpoint technique
+    if (attackData && attackData.technique === 'weakpoint') {
+        return resolveWeakpoint(database, pendingAttack, defenseType, defenseValue, dodgeValue);
     }
     
     if (defenseType === 'block') {
@@ -287,7 +383,7 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
             }
             
             await database.run(
-                'UPDATE characters SET current_health = ? WHERE id = ?',
+                `UPDATE characters SET current_health = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
                 [newHealth, pendingAttack.target_character_id]
             );
             
@@ -401,6 +497,46 @@ function createCombatResultEmbed(attackerName, targetName, combatResult, attackT
                 { name: 'Attack Accuracy', value: combatResult.attackAccuracy.toString(), inline: true },
                 { name: 'Dodge Value', value: combatResult.dodgeValue.toString(), inline: true },
                 { name: 'Pity Block', value: combatResult.pityBlockValue.toString(), inline: true },
+                { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true }
+            );
+    } else if (combatResult.type === 'weakpoint_block') {
+        if (combatResult.fullyDefended) {
+            embed.setColor(0x2ecc71)
+                .setTitle('🎯 Weakpoint Strike - Fully Blocked!')
+                .setDescription(`**${targetName}** completely blocked **${attackerName}**'s weakpoint strike!`)
+                .addFields(
+                    { name: 'Display Damage', value: combatResult.displayDamage.toString(), inline: true },
+                    { name: 'Block Value', value: combatResult.defenseValue.toString(), inline: true },
+                    { name: 'Final Damage', value: '0 (Fully Defended)', inline: true }
+                );
+        } else {
+            embed.setColor(0x8e44ad)
+                .setTitle('🎯 Weakpoint Strike - Critical Hit!')
+                .setDescription(`**${targetName}** couldn't fully block **${attackerName}**'s weakpoint strike! The attack found its mark!`)
+                .addFields(
+                    { name: 'Display Damage', value: combatResult.displayDamage.toString(), inline: true },
+                    { name: 'Block Value', value: combatResult.defenseValue.toString(), inline: true },
+                    { name: 'Weakpoint Damage', value: `${combatResult.actualDamage} (7% max health)`, inline: true },
+                    { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true }
+                );
+        }
+    } else if (combatResult.type === 'weakpoint_dodge') {
+        embed.setColor(0x3498db)
+            .setTitle('🎯 Weakpoint Strike - Dodged!')
+            .setDescription(`**${targetName}** successfully dodged **${attackerName}**'s weakpoint strike!`)
+            .addFields(
+                { name: 'Attack Accuracy', value: combatResult.attackAccuracy.toString(), inline: true },
+                { name: 'Dodge Value', value: combatResult.dodgeValue.toString(), inline: true },
+                { name: 'Final Damage', value: '0 (Fully Avoided)', inline: true }
+            );
+    } else if (combatResult.type === 'weakpoint_failed_dodge') {
+        embed.setColor(0x8e44ad)
+            .setTitle('🎯 Weakpoint Strike - Critical Hit!')
+            .setDescription(`**${targetName}** failed to dodge **${attackerName}**'s weakpoint strike! The attack struck a vital point!`)
+            .addFields(
+                { name: 'Attack Accuracy', value: combatResult.attackAccuracy.toString(), inline: true },
+                { name: 'Dodge Value', value: combatResult.dodgeValue.toString(), inline: true },
+                { name: 'Weakpoint Damage', value: `${combatResult.actualDamage} (7% max health)`, inline: true },
                 { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true }
             );
     }
