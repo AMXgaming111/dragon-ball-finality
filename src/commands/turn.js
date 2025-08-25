@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { hasStaffRole, calculateMaxHealthForCharacter } = require('../utils/calculations');
+const { hasStaffRole, calculateMaxHealthForCharacter, decrementTechniqueEffects } = require('../utils/calculations');
 
 module.exports = {
     name: 'turn',
@@ -585,5 +585,14 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
             'UPDATE characters SET current_ki = ? WHERE id = ?',
             [newKi, characterId]
         );
+        
+        // Enforce ki cap if ki was increased
+        if (kiChange > 0) {
+            const { enforceKiCap } = require('../utils/calculations');
+            await enforceKiCap(database, characterId);
+        }
     }
+    
+    // Decrement technique effect durations at end of turn
+    await decrementTechniqueEffects(database, characterId, channelId);
 }

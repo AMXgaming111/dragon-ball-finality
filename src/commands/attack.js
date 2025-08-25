@@ -1111,11 +1111,15 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
     }
 
     // Weakpoint - Reduced strength roll, but 7% health damage if not fully defended
-    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength * 0.7, 0, database, attackerData.active_character_id); // -0.3x penalty
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength * 0.7, 0, database, attackerData.active_character_id); // -0.3x penalty for display
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
     
-    const damage = rollWithEffort(baseDamage, effort);
+    const displayDamage = rollWithEffort(baseDamage, effort); // For display only
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+    
+    // Calculate 7% max health damage
+    const targetMaxHealth = await calculateMaxHealthForCharacter(database, targetData.active_character_id, targetData.base_pl, targetData.endurance);
+    const actualDamage = Math.floor(targetMaxHealth * 0.07); // 7% of max health
 
     // Deduct ki cost
     const newKi = currentKi - 4;
@@ -1129,21 +1133,23 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
     const embed = new EmbedBuilder()
         .setColor(0x8e44ad)
         .setTitle('🎯 Weakpoint Strike')
-        .setDescription(`**${attackerData.name}** targets a weakpoint on **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If not fully blocked/dodged, deals 7% of max health as damage instead of normal calculation.`)
+        .setDescription(`**${attackerData.name}** targets a weakpoint on **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If not fully blocked/dodged, deals 7% of max health (${actualDamage} damage) instead of normal calculation.`)
         .addFields(
-            { name: 'Attack Damage', value: `${damage} (reduced)`, inline: true },
+            { name: 'Display Damage', value: `${displayDamage} (reduced strength)`, inline: true },
+            { name: 'Actual Damage', value: `${actualDamage} (7% max health)`, inline: true },
             { name: 'Accuracy', value: accuracy.toString(), inline: true },
-            { name: 'Ki Cost', value: '4 ki', inline: true },
-            { name: 'Special Effect', value: '7% Max Health if not fully defended', inline: false }
+            { name: 'Ki Cost', value: '4 ki', inline: true }
         )
-        .setFooter({ text: 'Target must defend within 5 minutes or take full damage!' });
+        .setFooter({ text: 'Target must defend within 5 minutes or take percentage damage!' });
 
     // Store pending attack with technique data
     const attackData = {
         technique: 'weakpoint',
         effort: effort,
         accuracyMultiplier: accuracyMultiplier,
-        percentageDamage: 0.07 // 7% of max health if not fully defended
+        displayDamage: displayDamage, // For normal damage if fully defended
+        actualDamage: actualDamage,   // 7% health damage if not fully defended
+        targetMaxHealth: targetMaxHealth
     };
     
     await storePendingAttack(
@@ -1154,7 +1160,7 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
         attackerData.active_character_id,
         targetData.active_character_id,
         'technique',
-        damage,
+        actualDamage,
         accuracy,
         attackData
     );
@@ -1181,7 +1187,9 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
     const damage2 = rollWithEffort(baseDamage, effort);
     const totalDamage = damage1 + damage2;
     
-    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+    // Roll accuracy separately for each strike
+    const accuracy1 = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+    const accuracy2 = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
 
     // Deduct ki cost
     const newKi = currentKi - 4;
@@ -1197,10 +1205,9 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
         .setTitle('⚡ Double Strike')
         .setDescription(`**${attackerData.name}** launches a rapid double strike at **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** Each missed dodge roll reduces damage by one damage dice.`)
         .addFields(
-            { name: 'Strike 1', value: damage1.toString(), inline: true },
-            { name: 'Strike 2', value: damage2.toString(), inline: true },
+            { name: 'Strike 1', value: `${damage1} (Acc: ${accuracy1})`, inline: true },
+            { name: 'Strike 2', value: `${damage2} (Acc: ${accuracy2})`, inline: true },
             { name: 'Total Damage', value: totalDamage.toString(), inline: true },
-            { name: 'Accuracy', value: accuracy.toString(), inline: true },
             { name: 'Ki Cost', value: '4 ki', inline: true }
         )
         .setFooter({ text: 'Target must defend within 5 minutes or take full damage!' });
@@ -1211,7 +1218,9 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
         effort: effort,
         accuracyMultiplier: accuracyMultiplier,
         damage1: damage1,
-        damage2: damage2
+        damage2: damage2,
+        accuracy1: accuracy1,
+        accuracy2: accuracy2
     };
     
     await storePendingAttack(
@@ -1223,7 +1232,7 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
         targetData.active_character_id,
         'technique',
         totalDamage,
-        accuracy,
+        Math.max(accuracy1, accuracy2), // Use the higher accuracy for defense purposes
         attackData
     );
 

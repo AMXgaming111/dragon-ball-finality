@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { parseModifier, applyModifier, calculateMaxKi, generateKiBar, calculateEffectivePL, calculateKiCap, hasHumanSpirit } = require('../utils/calculations');
+const { parseModifier, applyModifier, calculateMaxKi, generateKiBar, calculateEffectivePL, calculateKiCap, hasHumanSpirit, calculateMaxHealthForCharacter } = require('../utils/calculations');
 
 module.exports = {
     name: 'ki',
@@ -97,8 +97,14 @@ module.exports = {
             const modifiedBasePL = userData.base_pl * basePLModifier;
             const modifiedEndurance = userData.endurance + enduranceModifier;
             
-            // Calculate max health and ki with form modifications
-            const maxHealth = Math.floor(modifiedBasePL * modifiedEndurance);
+            // Calculate max health and ki with form modifications using proper Ki Control system
+            const maxHealth = await calculateMaxHealthForCharacter(
+                database, 
+                userData.active_character_id, 
+                modifiedBasePL, 
+                modifiedEndurance, 
+                1 // formMultiplier is already applied to basePL above
+            );
             const maxKi = modifiedEndurance; // Ki max is always endurance (with form mods)
             
             let currentHealth = userData.current_health;
@@ -122,7 +128,6 @@ module.exports = {
             }
 
             // Calculate ki cap using the standardized function (accounts for Human Spirit racial)
-            // Calculate manually to ensure we use the correct max health
             const healthPercentage = (currentHealth / maxHealth) * 100;
             let kiCap;
             
@@ -139,15 +144,6 @@ module.exports = {
                 kiCap = Math.round(modifiedEndurance * (1 - actualReduction));
                 kiCap = Math.max(1, kiCap); // Minimum 1 ki cap
             }
-            
-            // Debug logging to help identify the issue
-            console.log(`Ki Cap Debug for ${userData.name}:`);
-            console.log(`- Base endurance: ${userData.endurance}`);
-            console.log(`- Modified endurance: ${modifiedEndurance}`);
-            console.log(`- Current health: ${currentHealth}`);
-            console.log(`- Max health: ${maxHealth}`);
-            console.log(`- Health percentage: ${Math.round(healthPercentage)}%`);
-            console.log(`- Calculated ki cap: ${kiCap}`);
 
             if (modifierStr) {
                 // Modifying ki - check if it's a percentage
@@ -168,16 +164,22 @@ module.exports = {
                 // Apply the modifier
                 let newKi = Math.floor(applyModifier(currentKi, modifier));
                 
-                // Ki can go above cap or below 0, just like health
-                // No capping unless specifically requested in the future
-
-                // Update database
+                // Update database first
                 await database.run(
                     'UPDATE characters SET current_ki = ? WHERE id = ?',
                     [newKi, userData.active_character_id]
                 );
 
-                currentKi = newKi;
+                // Enforce ki cap - automatically lower ki if above health cap
+                const { enforceKiCap } = require('../utils/calculations');
+                await enforceKiCap(database, userData.active_character_id);
+                
+                // Get the updated ki value after cap enforcement
+                const updatedCharacter = await database.get(
+                    'SELECT current_ki FROM characters WHERE id = ?',
+                    [userData.active_character_id]
+                );
+                currentKi = updatedCharacter.current_ki;
             }
 
             // Calculate ki percentage based on actual max ki (not capped)
