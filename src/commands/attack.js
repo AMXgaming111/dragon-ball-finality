@@ -218,6 +218,62 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     const maxAdditive = ((effectiveStrength + attackerData.endurance + attackerData.control) / 6).toFixed(2);
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
+        .setTitle('💪 Physical Combat')
+        .setDescription('How would you like to proceed?')
+        .addFields({ name: 'Max Additive', value: `Your maximum additive is **+${maxAdditive}**`, inline: false });
+
+    const attackButton = new ButtonBuilder()
+        .setCustomId('physical_attack')
+        .setLabel('Attack')
+        .setStyle(ButtonStyle.Primary);
+
+    const techniqueButton = new ButtonBuilder()
+        .setCustomId('physical_technique')
+        .setLabel('Technique')
+        .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder()
+        .addComponents(attackButton, techniqueButton);
+
+    await interaction.update({ embeds: [embed], components: [row] });
+
+    // Handle button interactions
+    const collector = interaction.message.createMessageComponentCollector({ 
+        time: 60000 
+    });
+
+    collector.on('collect', async (buttonInteraction) => {
+        if (buttonInteraction.user.id !== interaction.user.id) {
+            return buttonInteraction.reply({ 
+                content: 'Only the attacker can choose the action type.', 
+                ephemeral: true 
+            });
+        }
+
+        if (buttonInteraction.customId === 'physical_attack') {
+            await handleBasicPhysicalAttack(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database, maxAdditive);
+        } else if (buttonInteraction.customId === 'physical_technique') {
+            await handleTechniqueSelection(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+        }
+    });
+
+    collector.on('end', async (collected) => {
+        if (collected.size === 0) {
+            try {
+                await interaction.editReply({ 
+                    components: [], 
+                    content: 'Combat action timed out.' 
+                });
+            } catch (error) {
+                // Message might have been deleted
+            }
+        }
+    });
+}
+
+async function handleBasicPhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database, maxAdditive) {
+    const embed = new EmbedBuilder()
+        .setColor(0xf39c12)
         .setTitle('💪 Physical Attack')
         .setDescription('How would you like to modify your physical attack?\n(Use `+<number>` for additive, or `0` for basic):')
         .addFields({ name: 'Max Additive', value: `Your maximum additive is **+${maxAdditive}**`, inline: false });    await interaction.update({ embeds: [embed], components: [] });
@@ -429,6 +485,87 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         await collected.first().delete();
     } catch (error) {
         // Might not have permission to delete
+    }
+}
+
+async function handleTechniqueSelection(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+    const embed = new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('⚡ Common Techniques')
+        .setDescription('Select a technique to use:\n\n' +
+            '**Clear Mind** (`cmind`) - +30 Control until end of next turn\n' +
+            '**Guard** (`guard`) - 20% damage reduction until next turn\n' +
+            '**Heavy Blow** (`hblow`) - Enemy gets -20% agility if damaged\n' +
+            '**Feint** (`feint`) - Enemy dodge rolls get -0.5x penalty\n' +
+            '**Weakpoint** (`wpoint`) - 7% max health damage if not fully defended (4 ki)\n' +
+            '**Double Strike** (`dstrike`) - Roll twice, add together (4 ki)\n' +
+            '**Counter** (`counter`) - Unblockable/undodgeable vs last attacker (4 ki)\n' +
+            '**Chokehold** (`chold`) - Enemy loses 8% ki if damaged (4 ki)\n' +
+            '**Grab** (`grab`) - Force strength vs dodge attempts (4 ki)')
+        .setFooter({ text: 'Type the technique key (e.g., "cmind" for Clear Mind)' });
+
+    await interaction.update({ embeds: [embed], components: [] });
+
+    // Wait for user input
+    const filter = (msg) => msg.author.id === interaction.user.id;
+    const collected = await interaction.channel.awaitMessages({ 
+        filter, 
+        max: 1, 
+        time: 30000 
+    });
+
+    if (collected.size === 0) {
+        const timeoutEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('⏰ Technique Selection Timed Out')
+            .setDescription('Technique selection timed out.');
+        return interaction.editReply({ embeds: [timeoutEmbed], components: [] });
+    }
+
+    const techniqueKey = collected.first().content.toLowerCase();
+    
+    // Delete the user's input message
+    try {
+        await collected.first().delete();
+    } catch (error) {
+        // Might not have permission to delete
+    }
+
+    // Handle technique based on key
+    switch (techniqueKey) {
+        case 'cmind':
+            await handleClearMind(interaction, attackerData, targetData, database);
+            break;
+        case 'guard':
+            await handleGuard(interaction, attackerData, targetData, database);
+            break;
+        case 'hblow':
+            await handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            break;
+        case 'feint':
+            await handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            break;
+        case 'wpoint':
+            await handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            break;
+        case 'dstrike':
+            await handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            break;
+        case 'counter':
+            await handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            break;
+        case 'chold':
+            await handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            break;
+        case 'grab':
+            await handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
+            break;
+        default:
+            const errorEmbed = new EmbedBuilder()
+                .setColor(0xe74c3c)
+                .setTitle('❌ Unknown Technique')
+                .setDescription(`Unknown technique key: "${techniqueKey}"\n\nValid keys: cmind, guard, hblow, feint, wpoint, dstrike, counter, chold, grab`);
+            return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 }
 
@@ -799,4 +936,412 @@ async function handleMagicAttack(interaction, attackerData, targetData, attacker
     } catch (error) {
         // Might not have permission to delete
     }
+}
+
+// Technique Handlers
+
+async function handleClearMind(interaction, attackerData, targetData, database) {
+    // Clear Mind - +30 Control until end of next turn
+    const embed = new EmbedBuilder()
+        .setColor(0x3498db)
+        .setTitle('🧘 Clear Mind')
+        .setDescription(`**${attackerData.name}** clears their mind and focuses!\n\n+30 Control until the end of their next turn.`)
+        .setFooter({ text: 'This effect will automatically be applied to rolls.' });
+
+    // TODO: Store the Clear Mind effect in database for turn tracking
+    // For now, just show the result
+    await interaction.editReply({ embeds: [embed], components: [] });
+}
+
+async function handleGuard(interaction, attackerData, targetData, database) {
+    // Guard - 20% damage reduction until next turn
+    const embed = new EmbedBuilder()
+        .setColor(0x2ecc71)
+        .setTitle('🛡️ Guard')
+        .setDescription(`**${attackerData.name}** takes a defensive stance!\n\nAll incoming damage reduced by 20% until the start of their next turn.`)
+        .setFooter({ text: 'This effect will automatically be applied to incoming attacks.' });
+
+    // TODO: Store the Guard effect in database for turn tracking
+    await interaction.editReply({ embeds: [embed], components: [] });
+}
+
+async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+    // Heavy Blow - Normal attack + agility debuff if damage dealt
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    
+    const damage = rollWithEffort(baseDamage, effort);
+    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+
+    const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
+
+    const embed = new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle('💥 Heavy Blow')
+        .setDescription(`**${attackerData.name}** throws a heavy blow at **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If damage is dealt, target gets -20% agility until start of your next turn.`)
+        .addFields(
+            { name: 'Attack Damage', value: damage.toString(), inline: true },
+            { name: 'Accuracy', value: accuracy.toString(), inline: true },
+            { name: 'Special Effect', value: '-20% Agility if damaged', inline: true }
+        )
+        .setFooter({ text: 'Target must defend within 5 minutes or take full damage!' });
+
+    // Store pending attack with technique data
+    const attackData = {
+        technique: 'heavy_blow',
+        effort: effort,
+        accuracyMultiplier: accuracyMultiplier
+    };
+    
+    await storePendingAttack(
+        database,
+        interaction.channel.id,
+        interaction.user.id,
+        targetData.owner_id,
+        attackerData.active_character_id,
+        targetData.active_character_id,
+        'technique',
+        damage,
+        accuracy,
+        attackData
+    );
+
+    await interaction.editReply({ embeds: [embed], components: [] });
+}
+
+async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+    // Feint - Attack with dodge penalty
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    
+    const damage = rollWithEffort(baseDamage, effort);
+    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+
+    const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
+
+    const embed = new EmbedBuilder()
+        .setColor(0xf39c12)
+        .setTitle('🎭 Feint')
+        .setDescription(`**${attackerData.name}** attempts a tricky feint against **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If target attempts to dodge, their agility roll gets -0.5x penalty.`)
+        .addFields(
+            { name: 'Attack Damage', value: damage.toString(), inline: true },
+            { name: 'Accuracy', value: accuracy.toString(), inline: true },
+            { name: 'Special Effect', value: 'Dodge rolls -0.5x', inline: true }
+        )
+        .setFooter({ text: 'Target must defend within 5 minutes or take full damage!' });
+
+    // Store pending attack with technique data
+    const attackData = {
+        technique: 'feint',
+        effort: effort,
+        accuracyMultiplier: accuracyMultiplier
+    };
+    
+    await storePendingAttack(
+        database,
+        interaction.channel.id,
+        interaction.user.id,
+        targetData.owner_id,
+        attackerData.active_character_id,
+        targetData.active_character_id,
+        'technique',
+        damage,
+        accuracy,
+        attackData
+    );
+
+    await interaction.editReply({ embeds: [embed], components: [] });
+}
+
+async function handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+    // Check ki cost (4 ki, unaffected by control)
+    const currentKi = attackerData.current_ki || attackerData.endurance;
+    if (currentKi < 4) {
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Insufficient Ki')
+            .setDescription('Not enough ki! Weakpoint requires 4 ki.');
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
+    }
+
+    // Weakpoint - Reduced strength roll, but 7% health damage if not fully defended
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength * 0.7, 0, database, attackerData.active_character_id); // -0.3x penalty
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    
+    const damage = rollWithEffort(baseDamage, effort);
+    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+
+    // Deduct ki cost
+    const newKi = currentKi - 4;
+    await database.run(
+        'UPDATE characters SET current_ki = ? WHERE id = ?',
+        [newKi, attackerData.active_character_id]
+    );
+
+    const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
+
+    const embed = new EmbedBuilder()
+        .setColor(0x8e44ad)
+        .setTitle('🎯 Weakpoint Strike')
+        .setDescription(`**${attackerData.name}** targets a weakpoint on **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If not fully blocked/dodged, deals 7% of max health as damage instead of normal calculation.`)
+        .addFields(
+            { name: 'Attack Damage', value: `${damage} (reduced)`, inline: true },
+            { name: 'Accuracy', value: accuracy.toString(), inline: true },
+            { name: 'Ki Cost', value: '4 ki', inline: true },
+            { name: 'Special Effect', value: '7% Max Health if not fully defended', inline: false }
+        )
+        .setFooter({ text: 'Target must defend within 5 minutes or take full damage!' });
+
+    // Store pending attack with technique data
+    const attackData = {
+        technique: 'weakpoint',
+        effort: effort,
+        accuracyMultiplier: accuracyMultiplier
+    };
+    
+    await storePendingAttack(
+        database,
+        interaction.channel.id,
+        interaction.user.id,
+        targetData.owner_id,
+        attackerData.active_character_id,
+        targetData.active_character_id,
+        'technique',
+        damage,
+        accuracy,
+        attackData
+    );
+
+    await interaction.editReply({ embeds: [embed], components: [] });
+}
+
+async function handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+    // Check ki cost (4 ki, unaffected by control)
+    const currentKi = attackerData.current_ki || attackerData.endurance;
+    if (currentKi < 4) {
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Insufficient Ki')
+            .setDescription('Not enough ki! Double Strike requires 4 ki.');
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
+    }
+
+    // Double Strike - Roll twice and add together
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    
+    const damage1 = rollWithEffort(baseDamage, effort);
+    const damage2 = rollWithEffort(baseDamage, effort);
+    const totalDamage = damage1 + damage2;
+    
+    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+
+    // Deduct ki cost
+    const newKi = currentKi - 4;
+    await database.run(
+        'UPDATE characters SET current_ki = ? WHERE id = ?',
+        [newKi, attackerData.active_character_id]
+    );
+
+    const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
+
+    const embed = new EmbedBuilder()
+        .setColor(0xe67e22)
+        .setTitle('⚡ Double Strike')
+        .setDescription(`**${attackerData.name}** launches a rapid double strike at **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** Each missed dodge roll reduces damage by one damage dice.`)
+        .addFields(
+            { name: 'Strike 1', value: damage1.toString(), inline: true },
+            { name: 'Strike 2', value: damage2.toString(), inline: true },
+            { name: 'Total Damage', value: totalDamage.toString(), inline: true },
+            { name: 'Accuracy', value: accuracy.toString(), inline: true },
+            { name: 'Ki Cost', value: '4 ki', inline: true }
+        )
+        .setFooter({ text: 'Target must defend within 5 minutes or take full damage!' });
+
+    // Store pending attack with technique data
+    const attackData = {
+        technique: 'double_strike',
+        effort: effort,
+        accuracyMultiplier: accuracyMultiplier,
+        damage1: damage1,
+        damage2: damage2
+    };
+    
+    await storePendingAttack(
+        database,
+        interaction.channel.id,
+        interaction.user.id,
+        targetData.owner_id,
+        attackerData.active_character_id,
+        targetData.active_character_id,
+        'technique',
+        totalDamage,
+        accuracy,
+        attackData
+    );
+
+    await interaction.editReply({ embeds: [embed], components: [] });
+}
+
+async function handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+    // Check ki cost (4 ki, unaffected by control)
+    const currentKi = attackerData.current_ki || attackerData.endurance;
+    if (currentKi < 4) {
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Insufficient Ki')
+            .setDescription('Not enough ki! Counter requires 4 ki.');
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
+    }
+
+    // TODO: Check if target attacked this character last turn and dealt no damage
+    // For now, we'll implement the basic counter attack
+
+    // Counter - Reduced strength, unblockable/undodgeable
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength * 0.8, 0, database, attackerData.active_character_id); // -0.2x debuff
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    
+    const damage = rollWithEffort(baseDamage, effort);
+    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+
+    // Deduct ki cost
+    const newKi = currentKi - 4;
+    await database.run(
+        'UPDATE characters SET current_ki = ? WHERE id = ?',
+        [newKi, attackerData.active_character_id]
+    );
+
+    const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
+
+    const embed = new EmbedBuilder()
+        .setColor(0x34495e)
+        .setTitle('↩️ Counter Attack')
+        .setDescription(`**${attackerData.name}** counters **${targetData.name}**!\n\n*This attack cannot be blocked or dodged!*`)
+        .addFields(
+            { name: 'Attack Damage', value: `${damage} (reduced)`, inline: true },
+            { name: 'Accuracy', value: accuracy.toString(), inline: true },
+            { name: 'Ki Cost', value: '4 ki', inline: true },
+            { name: 'Special Effect', value: 'Unblockable & Undodgeable', inline: false }
+        )
+        .setFooter({ text: 'Counter attacks cannot be defended against!' });
+
+    // Store pending attack with technique data
+    const attackData = {
+        technique: 'counter',
+        effort: effort,
+        accuracyMultiplier: accuracyMultiplier
+    };
+    
+    await storePendingAttack(
+        database,
+        interaction.channel.id,
+        interaction.user.id,
+        targetData.owner_id,
+        attackerData.active_character_id,
+        targetData.active_character_id,
+        'technique',
+        damage,
+        accuracy,
+        attackData
+    );
+
+    await interaction.editReply({ embeds: [embed], components: [] });
+}
+
+async function handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+    // Check ki cost (4 ki, unaffected by control)
+    const currentKi = attackerData.current_ki || attackerData.endurance;
+    if (currentKi < 4) {
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Insufficient Ki')
+            .setDescription('Not enough ki! Chokehold requires 4 ki.');
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
+    }
+
+    // Chokehold - Normal attack + ki drain if damage dealt
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    
+    const damage = rollWithEffort(baseDamage, effort);
+    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+
+    // Deduct ki cost
+    const newKi = currentKi - 4;
+    await database.run(
+        'UPDATE characters SET current_ki = ? WHERE id = ?',
+        [newKi, attackerData.active_character_id]
+    );
+
+    const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
+
+    const embed = new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('🤏 Chokehold')
+        .setDescription(`**${attackerData.name}** attempts to grab **${targetData.name}** in a chokehold!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If damage is dealt, target loses 8% of their ki.`)
+        .addFields(
+            { name: 'Attack Damage', value: damage.toString(), inline: true },
+            { name: 'Accuracy', value: accuracy.toString(), inline: true },
+            { name: 'Ki Cost', value: '4 ki', inline: true },
+            { name: 'Special Effect', value: '8% Ki drain if damaged', inline: false }
+        )
+        .setFooter({ text: 'Target must defend within 5 minutes or take full damage!' });
+
+    // Store pending attack with technique data
+    const attackData = {
+        technique: 'chokehold',
+        effort: effort,
+        accuracyMultiplier: accuracyMultiplier
+    };
+    
+    await storePendingAttack(
+        database,
+        interaction.channel.id,
+        interaction.user.id,
+        targetData.owner_id,
+        attackerData.active_character_id,
+        targetData.active_character_id,
+        'technique',
+        damage,
+        accuracy,
+        attackData
+    );
+
+    await interaction.editReply({ embeds: [embed], components: [] });
+}
+
+async function handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+    // Check ki cost (4 ki, unaffected by control)
+    const currentKi = attackerData.current_ki || attackerData.endurance;
+    if (currentKi < 4) {
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('❌ Insufficient Ki')
+            .setDescription('Not enough ki! Grab requires 4 ki.');
+        return interaction.editReply({ embeds: [errorEmbed], components: [] });
+    }
+
+    // Deduct ki cost
+    const newKi = currentKi - 4;
+    await database.run(
+        'UPDATE characters SET current_ki = ? WHERE id = ?',
+        [newKi, attackerData.active_character_id]
+    );
+
+    // Grab - Special technique that doesn't take your turn
+    const embed = new EmbedBuilder()
+        .setColor(0x16a085)
+        .setTitle('🤲 Grab')
+        .setDescription(`**${attackerData.name}** grabs **${targetData.name}**!\n\n**Effect:** Until the beginning of your next turn, whenever ${targetData.name} tries to dodge, they must roll their Strength against yours first. If they fail, their dodge is unsuccessful regardless of agility roll.\n\n**Note:** This technique doesn't end your turn!`)
+        .addFields(
+            { name: 'Your Strength', value: attackerData.strength.toString(), inline: true },
+            { name: 'Target', value: targetData.name, inline: true },
+            { name: 'Ki Cost', value: '4 ki', inline: true },
+            { name: 'Special', value: 'Does not end turn', inline: false }
+        )
+        .setFooter({ text: 'Grab effect will be applied to all dodge attempts until your next turn.' });
+
+    // TODO: Store the grab effect in database for tracking
+    // For now, just show the result
+    await interaction.editReply({ embeds: [embed], components: [] });
 }
