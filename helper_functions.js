@@ -105,15 +105,19 @@ async function autoManageTurnOrder(channelId, attackerId, defenderId, client, da
  * Advance turn from a button interaction
  */
 async function advanceTurnFromInteraction(interaction, database) {
+    console.log('=== ADVANCE TURN DEBUG: Function called');
     const channelId = interaction.channel.id;
+    console.log('=== ADVANCE TURN DEBUG: Channel ID:', channelId);
     
     // Check if turn order exists
     const turnOrder = await database.get(
         'SELECT * FROM turn_orders WHERE channel_id = ?',
         [channelId]
     );
+    console.log('=== ADVANCE TURN DEBUG: Turn order found:', !!turnOrder);
 
     if (!turnOrder) {
+        console.log('=== ADVANCE TURN DEBUG: No turn order, sending error message');
         await interaction.update({ 
             content: 'No turn order exists in this channel.',
             embeds: interaction.message.embeds,
@@ -122,13 +126,17 @@ async function advanceTurnFromInteraction(interaction, database) {
         return;
     }
 
+    console.log('=== ADVANCE TURN DEBUG: Parsing participants');
     const participants = JSON.parse(turnOrder.participants);
     let currentTurn = turnOrder.current_turn;
     let currentRound = turnOrder.current_round;
+    console.log('=== ADVANCE TURN DEBUG: Current turn:', currentTurn, 'Current round:', currentRound);
 
     // Apply end-of-turn effects for current character
     const currentParticipant = participants[currentTurn];
+    console.log('=== ADVANCE TURN DEBUG: Applying end-of-turn effects for:', currentParticipant?.characterName);
     await applyEndOfTurnEffects(currentParticipant.characterId, database);
+    console.log('=== ADVANCE TURN DEBUG: End-of-turn effects applied');
 
     // Advance turn
     currentTurn++;
@@ -136,14 +144,18 @@ async function advanceTurnFromInteraction(interaction, database) {
         currentTurn = 0;
         currentRound++;
     }
+    console.log('=== ADVANCE TURN DEBUG: New turn:', currentTurn, 'New round:', currentRound);
 
     // Update database
+    console.log('=== ADVANCE TURN DEBUG: Updating database');
     await database.run(
         'UPDATE turn_orders SET current_turn = ?, current_round = ? WHERE channel_id = ?',
         [currentTurn, currentRound, channelId]
     );
+    console.log('=== ADVANCE TURN DEBUG: Database updated');
 
     const nextParticipant = participants[currentTurn];
+    console.log('=== ADVANCE TURN DEBUG: Next participant:', nextParticipant?.characterName);
     
     // Refresh username for display
     let displayUsername = nextParticipant.username || 'Unknown User';
@@ -155,6 +167,7 @@ async function advanceTurnFromInteraction(interaction, database) {
     } catch (error) {
         // Keep the fallback username
     }
+    console.log('=== ADVANCE TURN DEBUG: Creating embed');
     
     const turnAdvanceEmbed = new EmbedBuilder()
         .setColor(0xf39c12)
@@ -166,10 +179,12 @@ async function advanceTurnFromInteraction(interaction, database) {
         );
 
     // Update the interaction with both the original combat embed and the turn advance embed
+    console.log('=== ADVANCE TURN DEBUG: About to update interaction');
     await interaction.update({ 
         embeds: [interaction.message.embeds[0], turnAdvanceEmbed],
         components: [] 
     });
+    console.log('=== ADVANCE TURN DEBUG: Interaction updated successfully');
 }
 
 /**
