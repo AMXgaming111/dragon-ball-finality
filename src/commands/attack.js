@@ -207,8 +207,17 @@ module.exports = {
 };
 
 async function handlePhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
+    // Get effective stats including technique effects (like Clear Mind)
+    const baseStats = {
+        control: attackerData.control,
+        strength: attackerData.strength,
+        agility: attackerData.agility,
+        endurance: attackerData.endurance
+    };
+    const effectiveStats = await calculateEffectiveStats(database, attackerData.active_character_id, interaction.channel.id, baseStats);
+    
     // Check for Namekian Giant Form bonus for max additive calculation
-    let effectiveStrength = attackerData.strength;
+    let effectiveStrength = effectiveStats.strength; // Use effective strength from technique effects
     const giantForm = await database.get(`
         SELECT is_active FROM character_racials 
         WHERE character_id = ? AND racial_tag = 'ngiant' AND is_active = 1
@@ -218,7 +227,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         effectiveStrength += 40; // Giant form grants +40 strength
     }
     
-    const maxAdditive = ((effectiveStrength + attackerData.endurance + attackerData.control) / 6).toFixed(2);
+    const maxAdditive = ((effectiveStrength + attackerData.endurance + effectiveStats.control) / 6).toFixed(2);
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
         .setTitle('💪 Physical Combat')
@@ -254,7 +263,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         }
 
         if (buttonInteraction.customId === 'physical_attack') {
-            await handleBasicPhysicalAttack(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database, maxAdditive);
+            await handleBasicPhysicalAttack(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database, maxAdditive, effectiveStats);
         } else if (buttonInteraction.customId === 'physical_technique') {
             await handleTechniqueSelection(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database);
         }
@@ -274,7 +283,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     });
 }
 
-async function handleBasicPhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database, maxAdditive) {
+async function handleBasicPhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database, maxAdditive, effectiveStats) {
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
         .setTitle('💪 Physical Attack')
@@ -344,9 +353,9 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
     } else {
         // Modified attack - calculate ki costs
         
-        // Apply accuracy multiplier ki cost if used
+        // Apply accuracy multiplier ki cost if used with effective control
         if (accuracyMultiplier > 1) {
-            const accuracyKiCost = calculateKiSpecialCost(accuracyMultiplier, attackerData.control);
+            const accuracyKiCost = calculateKiSpecialCost(accuracyMultiplier, effectiveStats.control);
             kiChange -= accuracyKiCost;
         }
         
@@ -573,9 +582,18 @@ async function handleTechniqueSelection(interaction, attackerData, targetData, a
 }
 
 async function handleKiAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database) {
-    // Calculate maximum affordable multiplier
+    // Get effective stats including technique effects (like Clear Mind)
+    const baseStats = {
+        control: attackerData.control,
+        strength: attackerData.strength,
+        agility: attackerData.agility,
+        endurance: attackerData.endurance
+    };
+    const effectiveStats = await calculateEffectiveStats(database, attackerData.active_character_id, interaction.channel.id, baseStats);
+    
+    // Calculate maximum affordable multiplier with effective control
     const attackerCurrentKi = attackerData.current_ki || attackerData.endurance;
-    const maxMultiplier = calculateMaxAffordableMultiplier(attackerCurrentKi, attackerData.control, effort, accuracyMultiplier, attackerData.endurance);
+    const maxMultiplier = calculateMaxAffordableMultiplier(attackerCurrentKi, effectiveStats.control, effort, accuracyMultiplier, attackerData.endurance);
     
     // Check if any multipliers are affordable
     if (maxMultiplier === 0) {
@@ -671,8 +689,8 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
-    // Calculate ki cost using new system
-    const kiCost = calculateKiSpecialCost(multiplier, attackerData.control);
+    // Calculate ki cost using new system with effective control
+    const kiCost = calculateKiSpecialCost(multiplier, effectiveStats.control);
     const currentKi = attackerData.current_ki || attackerData.endurance;
 
     // Calculate damage and accuracy
@@ -687,9 +705,9 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     const effortKiCost = getEffortKiCost(effort);
     let totalKiCost = kiCost;
     
-    // Add accuracy multiplier ki cost if used
+    // Add accuracy multiplier ki cost if used with effective control
     if (accuracyMultiplier > 1) {
-        const accuracyKiCost = calculateKiSpecialCost(accuracyMultiplier, attackerData.control);
+        const accuracyKiCost = calculateKiSpecialCost(accuracyMultiplier, effectiveStats.control);
         totalKiCost += accuracyKiCost;
     }
     
