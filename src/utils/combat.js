@@ -105,6 +105,26 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
             const currentHealth = targetData.current_health || maxHealth;
             const newHealth = Math.max(0, currentHealth - totalFinalDamage);
             
+            // Safety check to prevent NaN values in database
+            if (isNaN(newHealth) || isNaN(targetData.active_character_id)) {
+                console.error('Error managing health in double strike: NaN detected', {
+                    newHealth,
+                    currentHealth,
+                    totalFinalDamage,
+                    targetCharacterId: targetData.active_character_id,
+                    maxHealth
+                });
+                return {
+                    type: 'double_strike',
+                    defenseType: defenseType,
+                    strike1: strike1Result,
+                    strike2: strike2Result,
+                    totalDamage: damage1 + damage2,
+                    finalDamage: totalFinalDamage,
+                    success: totalFinalDamage < (damage1 + damage2)
+                };
+            }
+            
             await database.run(
                 'UPDATE characters SET current_health = ? WHERE id = ?',
                 [newHealth, targetData.active_character_id]
@@ -183,6 +203,22 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
     let finalDamage = 0;
     let combatResult = {};
     
+    // Safety check for NaN values
+    if (isNaN(pendingAttack.damage) || isNaN(defenseValue) || (dodgeValue !== null && isNaN(dodgeValue))) {
+        console.error('Error in resolveCombat: NaN values detected', {
+            damage: pendingAttack.damage,
+            defenseValue,
+            dodgeValue,
+            attackData
+        });
+        // Return safe default values
+        return {
+            type: 'error',
+            finalDamage: 0,
+            success: false
+        };
+    }
+    
     // Special handling for Double Strike technique
     if (attackData && attackData.technique === 'double_strike') {
         return resolveDoubleStrike(database, pendingAttack, defenseType, defenseValue, dodgeValue);
@@ -236,7 +272,19 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
                 targetData.endurance
             );
             const currentHealth = targetData.current_health || maxHealth;
-           const newHealth = currentHealth - finalDamage; // Allow negative health
+            const newHealth = currentHealth - finalDamage; // Allow negative health
+            
+            // Safety check to prevent NaN values in database
+            if (isNaN(newHealth) || isNaN(pendingAttack.target_character_id)) {
+                console.error('Error managing health: NaN detected', {
+                    newHealth,
+                    currentHealth,
+                    finalDamage,
+                    targetCharacterId: pendingAttack.target_character_id,
+                    maxHealth
+                });
+                return combatResult; // Exit early to prevent database error
+            }
             
             await database.run(
                 'UPDATE characters SET current_health = ? WHERE id = ?',

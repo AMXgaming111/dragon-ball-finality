@@ -282,7 +282,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         }
 
         if (buttonInteraction.customId === 'physical_attack') {
-            await handleBasicPhysicalAttack(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database, maxAdditive, effectiveStats);
+            await handleBasicPhysicalAttack(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, maxAdditive, effectiveStats);
         } else if (buttonInteraction.customId === 'physical_technique') {
             await handleTechniqueSelection(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
         }
@@ -302,7 +302,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     });
 }
 
-async function handleBasicPhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, effort, database, maxAdditive, effectiveStats) {
+async function handleBasicPhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, maxAdditive, effectiveStats) {
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
         .setTitle('💪 Physical Attack')
