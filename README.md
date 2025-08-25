@@ -1,6 +1,6 @@
 # 🐉 Shenron Discord Bot
 
-[![Version](https://img.shields.io/badge/version-0.0.5-orange.svg)](https://github.com/AMXgaming111/dragon-ball-finality/releases)
+[![Version](https://img.shields.io/badge/version-0.1.0--beta-orange.svg)](https://github.com/AMXgaming111/dragon-ball-finality/releases)
 [![Discord.js](https://img.shields.io/badge/discord.js-v14.21.0-blue.svg)](https://discord.js.org/)
 [![Node.js](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
@@ -146,6 +146,28 @@ A comprehensive Discord RPG bot for Dragon Ball-themed servers featuring turn-ba
 ```
 
 ## 📊 Version History
+
+- **v0.1.0-beta** (2025-08-25) - Complete Technique System & Combat Overhaul
+  - **NEW**: Complete technique system with 9 fully functional techniques
+    - **Free Techniques**: Clear Mind (+30 Control), Guard (20% damage reduction), Heavy Blow (agility debuff), Feint (dodge penalty)
+    - **Ki Techniques** (4 ki): Weakpoint (7% health damage), Double Strike (double rolls), Counter (unblockable), Chokehold (ki drain), Grab (strength-based dodge prevention)
+  - **MAJOR**: PostgreSQL compatibility overhaul for Railway deployment
+    - **FIXED**: GROUP_CONCAT → STRING_AGG conversion for all database queries
+    - **FIXED**: Parameter placeholders (? → $1, $2, $3) throughout codebase
+    - **ENHANCED**: Database compatibility layer with automatic SQL dialect detection
+  - **ENHANCED**: Turn advancement system completely rewritten
+    - **FIXED**: End turn buttons now functional across all attack types
+    - **ADDED**: Turn advancement debugging and error handling
+    - **IMPROVED**: Seamless combat flow with proper state management
+  - **FIXED**: Critical combat calculation bugs
+    - **AGILITY**: +10 agility modifier now properly applies to all techniques
+    - **FEINT**: Dodge penalty (-0.5x) now correctly implemented in defend command
+    - **ACCURACY**: All technique accuracy calculations fixed and standardized
+  - **TECHNICAL**: Major infrastructure improvements
+    - **DATABASE**: Full PostgreSQL migration with backward SQLite compatibility
+    - **DEPLOYMENT**: Railway.app production deployment with CI/CD pipeline
+    - **ERROR HANDLING**: Comprehensive debugging and error recovery systems
+    - **CODE QUALITY**: Unified parameter handling and database query standardization
 
 - **v0.0.5** (2025-08-15) - Command Enhancement & Magic System Implementation
   - **NEW**: Quoted name support for all character commands (`"Name Here"`)

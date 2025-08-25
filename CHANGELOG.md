@@ -1,5 +1,99 @@
 # Changelog
 
+## [0.1.0-beta] - 2025-08-25
+
+### Complete Technique System & Combat Overhaul
+
+#### 🎯 Complete Technique System Implementation
+- **9 Fully Functional Techniques**
+  - ✅ **Clear Mind**: +30 Control for 2 turns (FREE)
+  - ✅ **Guard**: 20% damage reduction until next turn (FREE)
+  - ✅ **Heavy Blow**: Normal attack + 20% agility debuff if damage dealt (FREE)
+  - ✅ **Feint**: Attack with -0.5x dodge penalty (FREE)
+  - ✅ **Weakpoint**: -0.3x strength but 7% max health damage if not fully defended (4 ki)
+  - ✅ **Double Strike**: Two damage rolls combined, dodge reduction per missed roll (4 ki)
+  - ✅ **Counter**: -0.2x strength but unblockable/undodgeable, usable after taking no damage (4 ki)
+  - ✅ **Chokehold**: Normal attack + 8% ki drain if damage dealt (4 ki)
+  - ✅ **Grab**: Strength vs Strength contest for dodge attempts, doesn't end turn (4 ki)
+
+#### 🛠️ PostgreSQL Compatibility Overhaul
+- **Complete Database Migration**
+  - ✅ **CONVERTED**: GROUP_CONCAT → STRING_AGG for PostgreSQL compatibility
+  - ✅ **UPDATED**: Parameter placeholders from ? to $1, $2, $3 throughout codebase
+  - ✅ **IMPLEMENTED**: Automatic database dialect detection (database.usePostgres)
+  - ✅ **MAINTAINED**: Full backward compatibility with SQLite for local development
+
+- **Railway.app Production Deployment**
+  - ✅ **DEPLOYED**: Live production environment with PostgreSQL database
+  - ✅ **CI/CD**: Automatic deployment pipeline via GitHub integration
+  - ✅ **MONITORING**: Comprehensive logging and error tracking systems
+
+#### ⚔️ Combat System Overhaul
+- **Turn Advancement System Rewrite**
+  - ✅ **FIXED**: End turn buttons now functional across all attack types
+  - ✅ **ENHANCED**: Turn advancement with proper database state management
+  - ✅ **ADDED**: Comprehensive debugging system for turn progression
+  - ✅ **IMPROVED**: Seamless combat flow with button interactions
+
+- **Critical Combat Bug Fixes**
+  - ✅ **AGILITY MODIFIER**: +10 agility bonus now properly applies to all techniques
+  - ✅ **FEINT PENALTY**: -0.5x dodge penalty correctly implemented in defend command
+  - ✅ **ACCURACY CALCULATIONS**: Standardized and fixed across all attack types
+  - ✅ **END TURN BUTTONS**: All techniques now have proper turn management
+
+#### 🔧 Technical Infrastructure Improvements
+- **Database Query Standardization**
+  - ✅ **UNIFIED**: Consistent parameter handling across all database operations
+  - ✅ **OPTIMIZED**: Efficient SQL queries with proper PostgreSQL syntax
+  - ✅ **ERROR HANDLING**: Comprehensive database error recovery and logging
+
+- **Code Quality Enhancements**
+  - ✅ **STANDARDIZED**: Unified function signatures across technique implementations
+  - ✅ **DEBUGGING**: Extensive logging for troubleshooting combat issues
+  - ✅ **MAINTENANCE**: Clean, documented code with consistent patterns
+
+#### 🎮 User Experience Improvements
+- **Enhanced Combat Flow**
+  - ✅ **INTUITIVE**: Clear technique descriptions and effects in combat embeds
+  - ✅ **RESPONSIVE**: Immediate feedback for all combat actions
+  - ✅ **VISUAL**: Consistent formatting and emoji usage across all techniques
+
+- **Error Prevention & Recovery**
+  - ✅ **VALIDATION**: Comprehensive input validation for all combat commands
+  - ✅ **FALLBACKS**: Graceful error handling with helpful user messages
+  - ✅ **STABILITY**: Robust system that handles edge cases and unexpected inputs
+
+### Updated Components
+- `src/commands/attack.js` - Complete technique system implementation with PostgreSQL compatibility
+- `src/commands/defend.js` - Added feint penalty detection and PostgreSQL parameter fixes
+- `helper_functions.js` - Rewritten turn advancement with PostgreSQL compatibility and debugging
+- `src/database/database.js` - Enhanced with PostgreSQL detection and compatibility layer
+- All database queries - Converted to PostgreSQL-compatible syntax with parameter placeholders
+
+### Migration Notes
+- Production deployment now uses PostgreSQL on Railway.app
+- Local development maintains SQLite compatibility
+- All existing characters and data preserved during database migration
+- No user-facing changes to command syntax or functionality
+- Technique system is fully integrated and ready for production use
+
+### Bug Fixes Resolved
+- Turn advancement buttons not working across attack types
+- Agility modifier (+10) not applying to technique calculations
+- Feint technique not applying dodge penalties to defenders
+- PostgreSQL GROUP_CONCAT compatibility issues
+- Database parameter placeholder incompatibilities
+- Silent failures in turn progression system
+- Inconsistent technique implementation across attack types
+
+### Performance Optimizations
+- Efficient PostgreSQL query patterns with proper indexing
+- Reduced database round trips through optimized query design
+- Enhanced error handling reduces retry overhead
+- Streamlined technique processing with unified code paths
+
+---
+
 ## [0.0.5] - 2025-08-15
 
 ### Command Enhancement & Magic System Implementation
