@@ -11,7 +11,8 @@ const {
     calculateKiCost,
     calculateKiSpecialCost,
     getCombatBonuses,
-    getCurrentKiCap
+    getCurrentKiCap,
+    generateHealthBar
 } = require('../utils/calculations');
 const { getPendingAttack, resolveCombat, createCombatResultEmbed, cleanupExpiredAttacks, addKiDisplay } = require('../utils/combat');
 const { autoManageTurnOrder, advanceTurnFromInteraction, applyEndOfTurnEffects } = require('../../helper_functions');
@@ -358,26 +359,51 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
 
     // Resolve combat
     const combatResult = await resolveCombat(database, pendingAttack, 'block', finalBlockValue);
-    // Create combined combat result embed
-    const combatEmbed = createCombatResultEmbed(attackerData.name, defenderData.name, combatResult, pendingAttack.attack_type);
-    // Add defense details to the same embed
-    combatEmbed.addFields(
-        { name: 'Block Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
-    );
+    
+    // Create detailed defense result embed instead of basic combat embed
+    const defenseEmbed = new EmbedBuilder()
+        .setColor(0x95a5a6)
+        .setTitle('🛡 Combat Result - Block')
+        .setDescription(`**${defenderData.name}** blocked **${attackerData.name}**'s ${pendingAttack.attack_type} attack!`)
+        .addFields(
+            { name: 'Attack Damage', value: combatResult.attackDamage.toString(), inline: true },
+            { name: 'Block Value', value: combatResult.defenseValue.toString(), inline: true },
+            { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true },
+            { name: 'Block Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
+        )
+        .setTimestamp();
+    
+    // Add health information if damage was taken
+    if (combatResult.healthUpdate && combatResult.finalDamage > 0) {
+        const { newHealth, maxHealth } = combatResult.healthUpdate;
+        const healthPercentage = (newHealth / maxHealth) * 100;
+        const healthBar = generateHealthBar(healthPercentage);
+        
+        defenseEmbed.addFields({
+            name: `${defenderData.name}'s Health`,
+            value: `${healthBar}\n${newHealth}/${maxHealth} (${Math.round(healthPercentage)}%)`,
+            inline: false
+        });
+        
+        // Only show critical status if health is positive but below 20%
+        if (newHealth > 0 && healthPercentage < 20) {
+            defenseEmbed.addFields({ name: 'Status', value: '⚠️ **CRITICAL**', inline: false });
+        }
+    }
 
     if (kiChange !== 0) {
-        combatEmbed.addFields({ 
+        defenseEmbed.addFields({ 
             name: 'Defender Ki Change', 
             value: `${kiChange > 0 ? '+' : ''}${kiChange}`, 
             inline: true 
         });
         
         // Add ki bar display
-        addKiDisplay(combatEmbed, defenderData.name, finalKiAfterAll, defenderData.endurance);
+        addKiDisplay(defenseEmbed, defenderData.name, finalKiAfterAll, defenderData.endurance);
     }
 
     // Edit the original message with the final combat result
-    await interaction.editReply({ embeds: [combatEmbed], components: [] });
+    await interaction.editReply({ embeds: [defenseEmbed], components: [] });
 
     // Delete the user's modifier input message
     try {
@@ -567,28 +593,65 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
 
     // Resolve combat with dodge
     const combatResult = await resolveCombat(database, pendingAttack, 'dodge', defenseValue, finalDodgeValue);
-    // Create combined combat result embed
-    const combatEmbed = createCombatResultEmbed(attackerData.name, defenderData.name, combatResult, pendingAttack.attack_type);
-    // Add defense details to the same embed
-    combatEmbed.addFields(
-        { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
-    );
+    
+    // Create detailed defense result embed instead of basic combat embed
+    const defenseEmbed = new EmbedBuilder()
+        .setTimestamp();
+    
+    if (combatResult.type === 'dodge') {
+        defenseEmbed.setColor(0x3498db)
+            .setTitle('💨 Combat Result - Successful Dodge')
+            .setDescription(`**${defenderData.name}** successfully dodged **${attackerData.name}**'s ${pendingAttack.attack_type} attack!`)
+            .addFields(
+                { name: 'Attack Accuracy', value: combatResult.attackAccuracy.toString(), inline: true },
+                { name: 'Dodge Value', value: combatResult.dodgeValue.toString(), inline: true },
+                { name: 'Final Damage', value: '0', inline: true },
+                { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
+            );
+    } else if (combatResult.type === 'failed_dodge') {
+        defenseEmbed.setColor(0xe67e22)
+            .setTitle('⚔️ Combat Result - Failed Dodge')
+            .setDescription(`**${defenderData.name}** failed to dodge **${attackerData.name}**'s ${pendingAttack.attack_type} attack but managed a last-second block!`)
+            .addFields(
+                { name: 'Attack Accuracy', value: combatResult.attackAccuracy.toString(), inline: true },
+                { name: 'Dodge Value', value: combatResult.dodgeValue.toString(), inline: true },
+                { name: 'Pity Block', value: combatResult.pityBlockValue.toString(), inline: true },
+                { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true },
+                { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
+            );
+    }
+    
+    // Add health information if damage was taken
+    if (combatResult.healthUpdate && combatResult.finalDamage > 0) {
+        const { newHealth, maxHealth } = combatResult.healthUpdate;
+        const healthPercentage = (newHealth / maxHealth) * 100;
+        const healthBar = generateHealthBar(healthPercentage);
+        
+        defenseEmbed.addFields({
+            name: `${defenderData.name}'s Health`,
+            value: `${healthBar}\n${newHealth}/${maxHealth} (${Math.round(healthPercentage)}%)`,
+            inline: false
+        });
+        
+        // Only show critical status if health is positive but below 20%
+        if (newHealth > 0 && healthPercentage < 20) {
+            defenseEmbed.addFields({ name: 'Status', value: '⚠️ **CRITICAL**', inline: false });
+        }
+    }
 
     if (kiChange !== 0) {
-        combatEmbed.addFields({ 
+        defenseEmbed.addFields({ 
             name: 'Defender Ki Change', 
             value: `${kiChange > 0 ? '+' : ''}${kiChange}`, 
             inline: true 
         });
-    }
-
-    // Add ki bar display when any ki actions occurred
-    if (kiChange !== 0) {
-        addKiDisplay(combatEmbed, defenderData.name, finalKiAfterAll, defenderData.endurance);
+        
+        // Add ki bar display when any ki actions occurred
+        addKiDisplay(defenseEmbed, defenderData.name, finalKiAfterAll, defenderData.endurance);
     }
 
     // Edit the original message with the final combat result
-    await interaction.editReply({ embeds: [combatEmbed], components: [] });
+    await interaction.editReply({ embeds: [defenseEmbed], components: [] });
 
     // Delete the user's modifier input message
     try {
