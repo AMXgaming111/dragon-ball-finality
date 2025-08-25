@@ -361,18 +361,26 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     // Resolve combat
     const combatResult = await resolveCombat(database, pendingAttack, 'block', finalBlockValue);
     
-    // Create detailed defense result embed instead of basic combat embed
-    const defenseEmbed = new EmbedBuilder()
-        .setColor(0x95a5a6)
-        .setTitle('🛡 Combat Result - Block')
-        .setDescription(`**${defenderData.name}** blocked **${attackerData.name}**'s ${pendingAttack.attack_type} attack!`)
-        .addFields(
-            { name: 'Attack Damage', value: combatResult.attackDamage.toString(), inline: true },
-            { name: 'Block Value', value: combatResult.defenseValue.toString(), inline: true },
-            { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true },
-            { name: 'Block Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
-        )
-        .setTimestamp();
+    // Handle different combat result types
+    let defenseEmbed;
+    
+    if (combatResult.type === 'weakpoint_block') {
+        // Use the specialized combat result embed for weakpoint
+        defenseEmbed = createCombatResultEmbed(attackerData.name, defenderData.name, combatResult, pendingAttack.attack_type);
+    } else {
+        // Create detailed defense result embed for regular attacks
+        defenseEmbed = new EmbedBuilder()
+            .setColor(0x95a5a6)
+            .setTitle('🛡 Combat Result - Block')
+            .setDescription(`**${defenderData.name}** blocked **${attackerData.name}**'s ${pendingAttack.attack_type} attack!`)
+            .addFields(
+                { name: 'Attack Damage', value: (combatResult.attackDamage || pendingAttack.damage).toString(), inline: true },
+                { name: 'Block Value', value: combatResult.defenseValue.toString(), inline: true },
+                { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true },
+                { name: 'Block Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
+            )
+            .setTimestamp();
+    }
     
     // Add health information if damage was taken
     if (combatResult.healthUpdate && combatResult.finalDamage > 0) {
@@ -656,6 +664,27 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
                     { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
                 );
         }
+    } else if (combatResult.type === 'weakpoint_dodge') {
+        defenseEmbed.setColor(0x3498db)
+            .setTitle('🎯 Weakpoint Strike - Dodged!')
+            .setDescription(`**${defenderData.name}** successfully dodged **${attackerData.name}**'s weakpoint strike!`)
+            .addFields(
+                { name: 'Attack Accuracy', value: combatResult.attackAccuracy.toString(), inline: true },
+                { name: 'Dodge Value', value: combatResult.dodgeValue.toString(), inline: true },
+                { name: 'Final Damage', value: '0 (Fully Avoided)', inline: true },
+                { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
+            );
+    } else if (combatResult.type === 'weakpoint_failed_dodge') {
+        defenseEmbed.setColor(0x8e44ad)
+            .setTitle('🎯 Weakpoint Strike - Critical Hit!')
+            .setDescription(`**${defenderData.name}** failed to dodge **${attackerData.name}**'s weakpoint strike! The attack struck a vital point!`)
+            .addFields(
+                { name: 'Attack Accuracy', value: combatResult.attackAccuracy.toString(), inline: true },
+                { name: 'Dodge Value', value: combatResult.dodgeValue.toString(), inline: true },
+                { name: 'Weakpoint Damage', value: `${combatResult.actualDamage} (7% max health)`, inline: true },
+                { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true },
+                { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
+            );
     } else {
         // Fallback for unexpected combat result types
         defenseEmbed.setColor(0x95a5a6)
