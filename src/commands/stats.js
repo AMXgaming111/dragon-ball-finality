@@ -51,9 +51,23 @@ module.exports = {
                         { name: 'Endurance', value: userData.endurance.toString(), inline: true },
                         { name: 'Control', value: userData.control.toString(), inline: true },
                         { name: 'Race', value: userData.race, inline: true }
-                    )
-                    .setFooter({ text: `Owner: ${targetUser.username}` })
-                    .setTimestamp();
+                    );
+
+                // Add specializations if any are set
+                if (userData.primary_specialization || userData.secondary_specialization) {
+                    let specializationText = '';
+                    if (userData.primary_specialization) {
+                        specializationText += `**Primary:** ${userData.primary_specialization.charAt(0).toUpperCase() + userData.primary_specialization.slice(1)}`;
+                    }
+                    if (userData.secondary_specialization) {
+                        if (specializationText) specializationText += '\n';
+                        specializationText += `**Secondary:** ${userData.secondary_specialization.charAt(0).toUpperCase() + userData.secondary_specialization.slice(1)}`;
+                    }
+                    embed.addFields({ name: 'Specializations', value: specializationText, inline: false });
+                }
+
+                embed.setFooter({ text: `Owner: ${targetUser.username}` })
+                     .setTimestamp();
 
                 return embed;
             };

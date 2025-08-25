@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateMaxHealth, generateHealthBar, generateKiBar, handleMajinMagic, getCombatBonuses } = require('./calculations');
+const { calculateMaxHealth, calculateMaxHealthForCharacter, generateHealthBar, generateKiBar, handleMajinMagic, getCombatBonuses } = require('./calculations');
 
 /**
  * Store a pending attack in the database
@@ -98,7 +98,12 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
     if (finalDamage > 0) {
         const targetData = await database.getUserWithActiveCharacter(pendingAttack.target_user_id);
         if (targetData) {
-            const maxHealth = targetData.base_pl * targetData.endurance;
+            const maxHealth = await calculateMaxHealthForCharacter(
+                database,
+                pendingAttack.target_character_id,
+                targetData.base_pl,
+                targetData.endurance
+            );
             const currentHealth = targetData.current_health || maxHealth;
            const newHealth = currentHealth - finalDamage; // Allow negative health
             

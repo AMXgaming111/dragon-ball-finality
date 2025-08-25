@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const { calculateMaxHealthForCharacter } = require('../utils/calculations');
 
 module.exports = {
     name: 'form',
@@ -85,14 +86,14 @@ module.exports = {
                 if (formData.health_activation_cost) {
                     healthCost = formData.health_activation_cost;
                     if (formData.health_activation_cost_percentage) {
-                        const maxHealth = userData.base_pl * userData.endurance;
+                        const maxHealth = await calculateMaxHealthForCharacter(userData.id);
                         healthCost = Math.floor(maxHealth * (healthCost / 100));
                     }
                 }
 
                 // Check if character has enough resources
                 const currentKi = userData.current_ki || userData.endurance;
-                const maxHealth = userData.base_pl * userData.endurance;
+                const maxHealth = await calculateMaxHealthForCharacter(userData.id);
                 const currentHealth = userData.current_health || maxHealth;
 
                 if (kiCost > 0 && currentKi < kiCost) {

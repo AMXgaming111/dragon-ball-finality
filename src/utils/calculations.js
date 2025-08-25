@@ -26,7 +26,12 @@ async function hasHumanSpirit(database, characterId) {
 
 // Calculate ki cap based on health with Human Spirit consideration
 async function calculateKiCap(database, character) {
-    const maxHealth = character.base_pl * character.endurance;
+    const maxHealth = await calculateMaxHealthForCharacter(
+        database,
+        character.id,
+        character.base_pl,
+        character.endurance
+    );
     const currentHealth = character.current_health || maxHealth;
     const healthPercentage = (currentHealth / maxHealth) * 100;
     
@@ -188,9 +193,36 @@ async function calculateEffectivePLWithRelease(database, characterId, basePL, ki
     return calculateEffectivePL(basePL, kiPercentage, formMultiplier, hasArcosianResilience, zenkaiBonus, majinMagicBonus, releasePercentage);
 }
 
-// Calculate maximum health based on base PL and endurance
-function calculateMaxHealth(basePL, endurance, formMultiplier = 1) {
-    return Math.floor(basePL * formMultiplier * endurance);
+// Calculate maximum health based on base PL, endurance, and Ki Control level
+function calculateMaxHealth(basePL, endurance, formMultiplier = 1, kiControlLevel = 0) {
+    let healthMultiplier;
+    
+    // Determine health multiplier based on Ki Control level
+    switch (kiControlLevel) {
+        case 0: // None
+            healthMultiplier = endurance / 4;
+            break;
+        case 1: // Basic
+            healthMultiplier = endurance / 2;
+            break;
+        case 2: // Advanced
+        default:
+            healthMultiplier = endurance;
+            break;
+    }
+    
+    return Math.floor(basePL * formMultiplier * healthMultiplier);
+}
+
+// Helper function to calculate max health for a character (with database lookup for Ki Control)
+async function calculateMaxHealthForCharacter(database, characterId, basePL, endurance, formMultiplier = 1) {
+    // Get character's Ki Control level
+    const character = await database.get(`
+        SELECT ki_control FROM characters WHERE id = ?
+    `, [characterId]);
+    
+    const kiControlLevel = character ? (character.ki_control || 0) : 0;
+    return calculateMaxHealth(basePL, endurance, formMultiplier, kiControlLevel);
 }
 
 // Calculate maximum ki (equal to endurance stat)
@@ -598,6 +630,7 @@ module.exports = {
     calculateEffectivePLWithRelease,
     calculateMaxAffordableMultiplier,
     calculateMaxHealth,
+    calculateMaxHealthForCharacter,
     calculateMaxKi,
     calculateHealthPercentage,
     calculateKiCost,

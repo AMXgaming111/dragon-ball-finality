@@ -1,6 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const { cleanupExpiredAttacks, createCombatResultEmbed } = require('../utils/combat');
-const { calculateMaxHealth, generateHealthBar, hasStaffRole } = require('../utils/calculations');
+const { calculateMaxHealth, calculateMaxHealthForCharacter, generateHealthBar, hasStaffRole } = require('../utils/calculations');
 
 module.exports = {
     name: 'resolve',
@@ -39,7 +39,7 @@ module.exports = {
                     }
 
                     // Apply full damage (undefended attack)
-                    const maxHealth = targetData.base_pl * targetData.endurance;
+                    const maxHealth = await calculateMaxHealthForCharacter(attack.target_character_id);
                     const currentHealth = targetData.current_health || maxHealth;
                     const newHealth = Math.max(0, currentHealth - attack.damage);
 

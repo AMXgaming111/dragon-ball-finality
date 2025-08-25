@@ -11,7 +11,8 @@ const {
     calculateKiSpecialCost,
     calculateBlowback,
     getCombatBonuses,
-    getCurrentKiCap
+    getCurrentKiCap,
+    calculateMaxHealthForCharacter
 } = require('../utils/calculations');
 const { storePendingAttack, cleanupExpiredAttacks, addKiDisplay } = require('../utils/combat');
 const { autoManageTurnOrder } = require('../../helper_functions');
@@ -578,7 +579,7 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     );
 
     if (blowbackDamage > 0) {
-        const maxHealth = attackerData.base_pl * attackerData.endurance;
+        const maxHealth = await calculateMaxHealthForCharacter(attackerData.active_character_id);
         const currentHealth = attackerData.current_health || maxHealth;
         const newHealth = currentHealth - blowbackDamage;
         

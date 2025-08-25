@@ -1,6 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const { staffRoleName } = require('../utils/config');
-const { hasStaffRole, parseModifier, applyModifier } = require('../utils/calculations');
+const { hasStaffRole, parseModifier, applyModifier, calculateMaxHealthForCharacter } = require('../utils/calculations');
 
 module.exports = {
     name: 'saddall',
@@ -78,7 +78,7 @@ module.exports = {
             // If endurance was modified, may need to update health/ki
             if (newValues.endurance !== oldValues.endurance) {
                 // Recalculate max health and ki based on new endurance
-                const newMaxHealth = userData.base_pl * newValues.endurance;
+                const newMaxHealth = await calculateMaxHealthForCharacter(characterId);
                 const newMaxKi = newValues.endurance;
                 
                 // If current health/ki are null, set them to new maximums

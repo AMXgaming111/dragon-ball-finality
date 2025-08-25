@@ -93,6 +93,8 @@ class Database {
                 magic_mastery INTEGER DEFAULT 0,
                 primary_affinity TEXT DEFAULT NULL,
                 secondary_affinities TEXT DEFAULT NULL,
+                primary_specialization TEXT DEFAULT NULL,
+                secondary_specialization TEXT DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(name)
             )`,
@@ -187,6 +189,8 @@ class Database {
                 magic_mastery INTEGER DEFAULT 0,
                 primary_affinity TEXT DEFAULT NULL,
                 secondary_affinities TEXT DEFAULT NULL,
+                primary_specialization TEXT DEFAULT NULL,
+                secondary_specialization TEXT DEFAULT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (owner_id) REFERENCES users (user_id),
                 UNIQUE(name)
@@ -328,6 +332,28 @@ class Database {
             }
         } catch (error) {
             console.log('Migration handled:', error.message);
+        }
+
+        // Migration: Add specialization columns
+        try {
+            const tableInfo = this.usePostgres
+                ? await this.all(`SELECT column_name FROM information_schema.columns WHERE table_name = 'characters'`)
+                : await this.all(`PRAGMA table_info(characters)`);
+            
+            const hasPrimarySpec = this.usePostgres
+                ? tableInfo.some(col => col.column_name === 'primary_specialization')
+                : tableInfo.some(col => col.name === 'primary_specialization');
+            
+            if (!hasPrimarySpec) {
+                console.log('Adding specialization columns to characters table...');
+                
+                await this.run(`ALTER TABLE characters ADD COLUMN primary_specialization TEXT DEFAULT NULL`);
+                await this.run(`ALTER TABLE characters ADD COLUMN secondary_specialization TEXT DEFAULT NULL`);
+                
+                console.log('Migration completed: Added specialization columns');
+            }
+        } catch (error) {
+            console.log('Specialization migration handled:', error.message);
         }
     }
 

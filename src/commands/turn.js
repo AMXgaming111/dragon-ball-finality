@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { hasStaffRole } = require('../utils/calculations');
+const { hasStaffRole, calculateMaxHealthForCharacter } = require('../utils/calculations');
 
 module.exports = {
     name: 'turn',
@@ -442,7 +442,7 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
             WHERE character_id = ? AND racial_tag = 'mregen_enhanced' AND is_active = 1
         `, [characterId]);
         
-        const maxHealth = character.base_pl * character.endurance;
+        const maxHealth = await calculateMaxHealthForCharacter(characterId);
         const currentHealth = character.current_health || maxHealth;
         
         if (currentHealth < maxHealth) {
@@ -562,7 +562,7 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
 
     // Apply changes
     if (healthChange !== 0) {
-        const maxHealth = character.base_pl * character.endurance;
+        const maxHealth = await calculateMaxHealthForCharacter(characterId);
         const currentHealth = character.current_health || maxHealth;
         const newHealth = Math.min(maxHealth, currentHealth + healthChange); // Cap at max health
         

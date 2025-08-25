@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateEffectivePL, calculateEffectivePLWithRelease, calculateHealthPercentage, calculateMaxHealth, calculateMaxKi, getCombatBonuses } = require('../utils/calculations');
+const { calculateEffectivePL, calculateEffectivePLWithRelease, calculateHealthPercentage, calculateMaxHealth, calculateMaxHealthForCharacter, calculateMaxKi, getCombatBonuses } = require('../utils/calculations');
 
 module.exports = {
     name: 'pl',
@@ -47,7 +47,7 @@ module.exports = {
             // Calculate current health and ki values
             let currentHealth = userData.current_health;
             let currentKi = userData.current_ki;
-            let maxHealth = calculateMaxHealth(userData.base_pl, userData.endurance);
+            let maxHealth = await calculateMaxHealthForCharacter(userData.id);
             let maxKi = calculateMaxKi(userData.endurance);
 
             // Apply form modifiers if in a form
@@ -62,7 +62,7 @@ module.exports = {
                 }
                 
                 // Recalculate max health with form
-                maxHealth = calculateMaxHealth(userData.base_pl, userData.endurance, formMultiplier);
+                maxHealth = await calculateMaxHealthForCharacter(userData.id, formMultiplier);
             }
 
             // Set default values if null

@@ -1,5 +1,48 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateKiCost } = require('../utils/calculations');
+const { calculateKiCost, calculateMaxHealthForCharacter } = require('../utils/calculations');
+
+// Helper function to calculate cumulative ki cost for a given healing percentage
+function calculateCumulativeKiCost(healingPercent) {
+    if (healingPercent <= 0) return 0;
+    
+    // Ensure healing percent is in 10% increments and max 100%
+    const intervals = Math.min(Math.floor(healingPercent / 10), 10);
+    let totalCost = 0;
+    
+    // Each interval costs 3 more than the previous: 3, 6, 9, 12, 15, 18, 21, 24, 27, 30
+    for (let i = 1; i <= intervals; i++) {
+        totalCost += i * 3;
+    }
+    
+    return totalCost;
+}
+
+// Helper function to determine max healing percentage for given ki amount
+function getMaxHealingForKi(kiAmount) {
+    let maxPercent = 0;
+    
+    // Check each 10% interval up to 100%
+    for (let percent = 10; percent <= 100; percent += 10) {
+        const cost = calculateCumulativeKiCost(percent);
+        if (cost <= kiAmount) {
+            maxPercent = percent;
+        } else {
+            break;
+        }
+    }
+    
+    return maxPercent;
+}
+
+// Helper function to generate cost breakdown display
+function generateCostBreakdown() {
+    let breakdown = '';
+    for (let percent = 10; percent <= 100; percent += 10) {
+        const cost = calculateCumulativeKiCost(percent);
+        breakdown += `${percent}% = ${cost} ki\n`;
+    }
+    return breakdown;
+}
 
 module.exports = {
     name: 'nregen',
@@ -22,21 +65,28 @@ module.exports = {
                 return message.reply('Your character doesn\'t have the Namekian Physiology racial ability.');
             }
 
-            // Flat ki cost for 10% healing (3 ki points per 10%)
-            const minKiCost = 3;
-            const maxHealth = userData.base_pl * userData.endurance;
+            // Escalating ki cost system - show available options
+            const maxHealth = await calculateMaxHealthForCharacter(
+                database,
+                userData.active_character_id,
+                userData.base_pl,
+                userData.endurance
+            );
             const currentHealth = userData.current_health || maxHealth;
+            const currentKi = userData.current_ki || userData.endurance;
+            const maxHealingAvailable = getMaxHealingForKi(currentKi);
 
             const embed = new EmbedBuilder()
                 .setColor(0x4caf50)
                 .setTitle('🟢 Namekian Regeneration')
-                .setDescription('How much ki would you like to spend on regeneration?')
+                .setDescription('Select healing percentage (escalating ki costs):')
                 .addFields(
                     { name: 'Current Health', value: `${currentHealth}/${maxHealth}`, inline: true },
-                    { name: 'Cost per 10% heal', value: `${minKiCost} ki`, inline: true },
-                    { name: 'Current Ki', value: `${userData.current_ki || userData.endurance}/${userData.endurance}`, inline: true }
+                    { name: 'Current Ki', value: `${currentKi}/${userData.endurance}`, inline: true },
+                    { name: 'Max Affordable', value: `${maxHealingAvailable}%`, inline: true },
+                    { name: 'Healing Costs', value: generateCostBreakdown(), inline: false }
                 )
-                .setFooter({ text: 'Type the amount of ki you want to spend (must be a multiple of 3)' });
+                .setFooter({ text: 'Type the healing percentage you want (10, 20, 30, etc.)' });
 
             await message.reply({ embeds: [embed] });
 
@@ -52,29 +102,28 @@ module.exports = {
                 return message.reply('Regeneration timed out.');
             }
 
-            const kiInput = parseInt(collected.first().content);
-            if (isNaN(kiInput) || kiInput < minKiCost) {
-                return message.reply(`Invalid ki amount! Must be at least ${minKiCost} ki.`);
+            const healingInput = parseInt(collected.first().content);
+            if (isNaN(healingInput) || healingInput < 10 || healingInput > 100) {
+                return message.reply('Invalid healing percentage! Must be between 10 and 100.');
             }
 
-            // Check if ki input is a multiple of 3
-            if (kiInput % 3 !== 0) {
-                return message.reply('Ki amount must be a multiple of 3!');
+            // Check if healing percentage is a multiple of 10
+            if (healingInput % 10 !== 0) {
+                return message.reply('Healing percentage must be a multiple of 10 (10, 20, 30, etc.)!');
             }
 
-            // Check if user has enough ki
-            const currentKi = userData.current_ki || userData.endurance;
-            if (kiInput > currentKi) {
-                return message.reply(`You don't have enough ki! Current ki: ${currentKi}`);
-            }
-
-            // Calculate healing amount (10% per minimum cost unit)
-            const healingUnits = Math.floor(kiInput / minKiCost);
-            const healingPercent = healingUnits * 10;
-            const healingAmount = Math.floor(maxHealth * (healingPercent / 100));
+            // Calculate ki cost for requested healing
+            const kiCost = calculateCumulativeKiCost(healingInput);
             
+            // Check if user has enough ki
+            if (kiCost > currentKi) {
+                return message.reply(`You don't have enough ki! Need ${kiCost} ki, have ${currentKi} ki.`);
+            }
+
+            // Calculate healing amount
+            const healingAmount = Math.floor(maxHealth * (healingInput / 100));
             const newHealth = Math.min(maxHealth, currentHealth + healingAmount);
-            const newKi = currentKi - kiInput;
+            const newKi = currentKi - kiCost;
 
             // Update character's health and ki
             await database.run(
@@ -88,9 +137,9 @@ module.exports = {
                 .setTitle('🟢 Namekian Regeneration Complete')
                 .setDescription(`**${userData.name}** has regenerated health!`)
                 .addFields(
-                    { name: 'Ki Spent', value: `${kiInput} ki`, inline: true },
+                    { name: 'Healing Percentage', value: `${healingInput}%`, inline: true },
+                    { name: 'Ki Spent', value: `${kiCost} ki`, inline: true },
                     { name: 'Health Restored', value: `${healingAmount} HP`, inline: true },
-                    { name: 'Healing Percentage', value: `${healingPercent}%`, inline: true },
                     { name: 'New Health', value: `${newHealth}/${maxHealth}`, inline: true },
                     { name: 'Remaining Ki', value: `${newKi}/${userData.endurance}`, inline: true }
                 )

@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { parseModifier, applyModifier, calculateMaxHealth, generateHealthBar, calculateEffectivePL } = require('../utils/calculations');
+const { parseModifier, applyModifier, calculateMaxHealth, calculateMaxHealthForCharacter, generateHealthBar, calculateEffectivePL } = require('../utils/calculations');
 
 module.exports = {
     name: 'health',
@@ -97,8 +97,14 @@ module.exports = {
             const modifiedBasePL = userData.base_pl * basePLModifier;
             const modifiedEndurance = userData.endurance + enduranceModifier;
             
-            // Calculate max health with form modifications
-            const maxHealth = Math.floor(modifiedBasePL * modifiedEndurance);
+            // Calculate max health with form modifications and Ki Control scaling
+            const maxHealth = await calculateMaxHealthForCharacter(
+                database, 
+                userData.active_character_id, 
+                modifiedBasePL, 
+                modifiedEndurance, 
+                formMultiplier
+            );
             let currentHealth = userData.current_health;
 
             // Set default if null (use percentage of new max if form changed)
@@ -110,8 +116,15 @@ module.exports = {
                 );
             }
 
-            // Store original health percentage for form transitions
-            const healthPercentage = (currentHealth / (userData.base_pl * userData.endurance)) * 100;
+            // Store original health percentage for form transitions (use Ki Control-adjusted max health)
+            const originalMaxHealth = await calculateMaxHealthForCharacter(
+                database, 
+                userData.active_character_id, 
+                userData.base_pl, 
+                userData.endurance, 
+                1 // No form multiplier for original calculation
+            );
+            const healthPercentage = (currentHealth / originalMaxHealth) * 100;
 
             if (modifierStr) {
                 // Modifying health - check if it's a percentage
