@@ -572,6 +572,12 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         dodgeValue = calculateAccuracy(updatedEffectivePL, defenderData.agility, modifier, false);
     }
 
+    // Apply feint penalty if the attack is a feint
+    if (pendingAttack.attack_data && pendingAttack.attack_data.technique === 'feint') {
+        const feintPenalty = pendingAttack.attack_data.dodgePenalty || 0.5; // Default to 0.5x penalty
+        dodgeValue = Math.floor(dodgeValue * feintPenalty);
+    }
+
     // Apply effort to dodge roll
     const finalDodgeValue = rollWithEffort(dodgeValue, effort);
 

@@ -1014,7 +1014,7 @@ async function handleClearMind(interaction, attackerData, targetData, database) 
         .setDescription(`**${attackerData.name}** clears their mind and focuses!\n\n+30 Control until the end of their next turn.\n\n${kiBar}\n${currentKi}/${maxKi} Ki`)
         .setFooter({ text: 'This effect will automatically be applied to rolls.' });
 
-    await interaction.editReply({ embeds: [embed], components: [] });
+    await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
 async function handleGuard(interaction, attackerData, targetData, database) {
@@ -1097,13 +1097,13 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
         attackData
     );
 
-    await interaction.editReply({ embeds: [embed], components: [] });
+    await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
 async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
     // Feint - Attack with dodge penalty (FREE)
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
     
     const damage = rollWithEffort(baseDamage, effort);
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
@@ -1148,7 +1148,7 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
         attackData
     );
 
-    await interaction.editReply({ embeds: [embed], components: [] });
+    await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
 async function handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
@@ -1164,7 +1164,7 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
 
     // Weakpoint - Reduced strength roll, but 7% health damage if not fully defended
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength * 0.7, 0, database, attackerData.active_character_id); // -0.3x penalty for display
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
     
     const displayDamage = rollWithEffort(baseDamage, effort); // For display only
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
@@ -1221,7 +1221,7 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
         attackData
     );
 
-    await interaction.editReply({ embeds: [embed], components: [] });
+    await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
 async function handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
@@ -1237,7 +1237,7 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
 
     // Double Strike - Roll twice and add together
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
     
     const damage1 = rollWithEffort(baseDamage, effort);
     const damage2 = rollWithEffort(baseDamage, effort);
@@ -1299,7 +1299,7 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
         attackData
     );
 
-    await interaction.editReply({ embeds: [embed], components: [] });
+    await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
 async function handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
@@ -1318,7 +1318,7 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
 
     // Counter - Reduced strength, unblockable/undodgeable
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength * 0.8, 0, database, attackerData.active_character_id); // -0.2x debuff
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
     
     const damage = rollWithEffort(baseDamage, effort);
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
@@ -1358,7 +1358,7 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
         )
         .setFooter({ text: 'Counter attacks cannot be defended against!' });
 
-    await interaction.editReply({ embeds: [embed], components: [] });
+    await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
 async function handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
@@ -1374,7 +1374,7 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
 
     // Chokehold - Normal attack + ki drain if damage dealt
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
     
     const damage = rollWithEffort(baseDamage, effort);
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
@@ -1429,7 +1429,7 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
         attackData
     );
 
-    await interaction.editReply({ embeds: [embed], components: [] });
+    await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
 async function handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
@@ -1479,4 +1479,55 @@ async function handleGrab(interaction, attackerData, targetData, attackerEffecti
         .setFooter({ text: 'Grab effect will be applied to all dodge attempts until your next turn.' });
 
     await interaction.editReply({ embeds: [embed], components: [] });
+}
+
+// Helper function to add end turn functionality to attacks
+async function addEndTurnButtons(interaction, embed, attackerData, database) {
+    embed.setFooter({ text: 'Would you like to end your turn?' });
+    
+    const turnRow = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('end_turn_yes')
+                .setLabel('Yes')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId('end_turn_no')
+                .setLabel('No')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+    // Send the embed with turn management buttons
+    const attackMessage = await interaction.editReply({ embeds: [embed], components: [turnRow] });
+
+    // Handle turn management
+    const turnFilter = (buttonInteraction) => {
+        return (buttonInteraction.customId === 'end_turn_yes' || buttonInteraction.customId === 'end_turn_no') && 
+               buttonInteraction.user.id === interaction.user.id;
+    };
+
+    try {
+        const turnInteraction = await attackMessage.awaitMessageComponent({ 
+            filter: turnFilter, 
+            time: 60000 
+        });
+
+        if (turnInteraction.customId === 'end_turn_yes') {
+            const { advanceTurnFromInteraction } = require('../../helper_functions');
+            await advanceTurnFromInteraction(turnInteraction, database);
+        } else {
+            // User chose not to end turn
+            await turnInteraction.update({ 
+                embeds: [embed], 
+                components: [] 
+            });
+        }
+    } catch (error) {
+        // Timeout or error - remove buttons
+        try {
+            await interaction.editReply({ embeds: [embed], components: [] });
+        } catch (e) {
+            // Ignore edit errors
+        }
+    }
 }
