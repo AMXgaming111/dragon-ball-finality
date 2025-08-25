@@ -1042,7 +1042,7 @@ async function handleGuard(interaction, attackerData, targetData, database) {
         .setDescription(`**${attackerData.name}** takes a defensive stance!\n\nAll incoming damage reduced by 20% until the start of their next turn.\n\n${kiBar}\n${currentKi}/${maxKi} Ki`)
         .setFooter({ text: 'This effect will automatically be applied to incoming attacks.' });
 
-    await interaction.editReply({ embeds: [embed], components: [] });
+    await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
 async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
@@ -1175,8 +1175,10 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
 
     // Deduct ki cost
     const newKi = currentKi - 4;
+    const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
+    const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
     await database.run(
-        'UPDATE characters SET current_ki = ? WHERE id = ?',
+        `UPDATE characters SET current_ki = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
         [newKi, attackerData.active_character_id]
     );
 
@@ -1250,7 +1252,7 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
     // Deduct ki cost
     const newKi = currentKi - 4;
     await database.run(
-        'UPDATE characters SET current_ki = ? WHERE id = ?',
+        `UPDATE characters SET current_ki = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
         [newKi, attackerData.active_character_id]
     );
 
@@ -1326,7 +1328,7 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
     // Deduct ki cost
     const newKi = currentKi - 4;
     await database.run(
-        'UPDATE characters SET current_ki = ? WHERE id = ?',
+        `UPDATE characters SET current_ki = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
         [newKi, attackerData.active_character_id]
     );
 
@@ -1338,7 +1340,7 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
     const newHealth = Math.max(0, currentHealth - damage);
     
     await database.run(
-        'UPDATE characters SET current_health = ? WHERE id = ?',
+        `UPDATE characters SET current_health = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
         [newHealth, targetData.active_character_id]
     );
 
@@ -1382,7 +1384,7 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
     // Deduct ki cost
     const newKi = currentKi - 4;
     await database.run(
-        'UPDATE characters SET current_ki = ? WHERE id = ?',
+        `UPDATE characters SET current_ki = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
         [newKi, attackerData.active_character_id]
     );
 
@@ -1445,8 +1447,10 @@ async function handleGrab(interaction, attackerData, targetData, attackerEffecti
 
     // Deduct ki cost
     const newKi = currentKi - 4;
+    const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
+    const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
     await database.run(
-        'UPDATE characters SET current_ki = ? WHERE id = ?',
+        `UPDATE characters SET current_ki = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
         [newKi, attackerData.active_character_id]
     );
 
