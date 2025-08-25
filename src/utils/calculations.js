@@ -658,3 +658,113 @@ module.exports = {
     handleMajinMagic,
     getCombatBonuses
 };
+
+// Technique Effects Management
+
+// Add a technique effect
+async function addTechniqueEffect(database, characterId, channelId, techniqueName, effectType, effectValue, targetCharacterId = null, turnsRemaining = 1) {
+    await database.run(`
+        INSERT INTO technique_effects (character_id, channel_id, technique_name, effect_type, effect_value, target_character_id, turns_remaining)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [characterId, channelId, techniqueName, effectType, effectValue, targetCharacterId, turnsRemaining]);
+}
+
+// Get active technique effects for a character
+async function getTechniqueEffects(database, characterId, channelId, effectType = null) {
+    let query = `
+        SELECT * FROM technique_effects 
+        WHERE character_id = ? AND channel_id = ? AND turns_remaining > 0
+    `;
+    let params = [characterId, channelId];
+    
+    if (effectType) {
+        query += ` AND effect_type = ?`;
+        params.push(effectType);
+    }
+    
+    return await database.all(query, params);
+}
+
+// Get technique effects targeting a specific character
+async function getTechniqueEffectsOnTarget(database, targetCharacterId, channelId, effectType = null) {
+    let query = `
+        SELECT * FROM technique_effects 
+        WHERE target_character_id = ? AND channel_id = ? AND turns_remaining > 0
+    `;
+    let params = [targetCharacterId, channelId];
+    
+    if (effectType) {
+        query += ` AND effect_type = ?`;
+        params.push(effectType);
+    }
+    
+    return await database.all(query, params);
+}
+
+// Decrement technique effect turns and remove expired ones
+async function decrementTechniqueEffects(database, characterId, channelId) {
+    // Decrement turns for all effects of this character
+    await database.run(`
+        UPDATE technique_effects 
+        SET turns_remaining = turns_remaining - 1 
+        WHERE character_id = ? AND channel_id = ?
+    `, [characterId, channelId]);
+    
+    // Remove expired effects
+    await database.run(`
+        DELETE FROM technique_effects 
+        WHERE character_id = ? AND channel_id = ? AND turns_remaining <= 0
+    `, [characterId, channelId]);
+}
+
+// Remove specific technique effect
+async function removeTechniqueEffect(database, characterId, channelId, techniqueName) {
+    await database.run(`
+        DELETE FROM technique_effects 
+        WHERE character_id = ? AND channel_id = ? AND technique_name = ?
+    `, [characterId, channelId, techniqueName]);
+}
+
+// Calculate effective stats with technique bonuses
+async function calculateEffectiveStats(database, characterId, channelId, baseStats) {
+    const effects = await getTechniqueEffects(database, characterId, channelId);
+    
+    let effectiveStats = { ...baseStats };
+    
+    for (const effect of effects) {
+        switch (effect.effect_type) {
+            case 'control_bonus':
+                effectiveStats.control += parseInt(effect.effect_value);
+                break;
+            case 'strength_multiplier':
+                effectiveStats.strength *= parseFloat(effect.effect_value);
+                break;
+            case 'agility_multiplier':
+                effectiveStats.agility *= parseFloat(effect.effect_value);
+                break;
+            // Add more stat modifications as needed
+        }
+    }
+    
+    return effectiveStats;
+}
+
+// Calculate damage reduction from technique effects
+async function calculateTechniqueDamageReduction(database, characterId, channelId) {
+    const effects = await getTechniqueEffects(database, characterId, channelId, 'damage_reduction');
+    
+    let totalReduction = 0;
+    for (const effect of effects) {
+        totalReduction += parseFloat(effect.effect_value);
+    }
+    
+    return Math.min(totalReduction, 0.8); // Cap at 80% reduction
+}
+
+module.exports.addTechniqueEffect = addTechniqueEffect;
+module.exports.getTechniqueEffects = getTechniqueEffects;
+module.exports.getTechniqueEffectsOnTarget = getTechniqueEffectsOnTarget;
+module.exports.decrementTechniqueEffects = decrementTechniqueEffects;
+module.exports.removeTechniqueEffect = removeTechniqueEffect;
+module.exports.calculateEffectiveStats = calculateEffectiveStats;
+module.exports.calculateTechniqueDamageReduction = calculateTechniqueDamageReduction;

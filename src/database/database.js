@@ -161,6 +161,18 @@ class Database {
                 attack_data TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 expires_at TIMESTAMP NOT NULL
+            )`,
+
+            `CREATE TABLE IF NOT EXISTS technique_effects (
+                id SERIAL PRIMARY KEY,
+                character_id INTEGER NOT NULL,
+                channel_id TEXT NOT NULL,
+                technique_name TEXT NOT NULL,
+                effect_type TEXT NOT NULL,
+                effect_value TEXT NOT NULL,
+                target_character_id INTEGER DEFAULT NULL,
+                turns_remaining INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`
         ] : [
             // SQLite table definitions (existing)
@@ -263,6 +275,20 @@ class Database {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 expires_at DATETIME NOT NULL,
                 FOREIGN KEY (attacker_character_id) REFERENCES characters (id),
+                FOREIGN KEY (target_character_id) REFERENCES characters (id)
+            )`,
+
+            `CREATE TABLE IF NOT EXISTS technique_effects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL,
+                channel_id TEXT NOT NULL,
+                technique_name TEXT NOT NULL,
+                effect_type TEXT NOT NULL,
+                effect_value TEXT NOT NULL,
+                target_character_id INTEGER DEFAULT NULL,
+                turns_remaining INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (character_id) REFERENCES characters (id),
                 FOREIGN KEY (target_character_id) REFERENCES characters (id)
             )`
         ];

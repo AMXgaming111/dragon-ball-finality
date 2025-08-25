@@ -12,7 +12,10 @@ const {
     calculateBlowback,
     getCombatBonuses,
     getCurrentKiCap,
-    calculateMaxHealthForCharacter
+    calculateMaxHealthForCharacter,
+    addTechniqueEffect,
+    getTechniqueEffects,
+    calculateEffectiveStats
 } = require('../utils/calculations');
 const { storePendingAttack, cleanupExpiredAttacks, addKiDisplay } = require('../utils/combat');
 const { autoManageTurnOrder } = require('../../helper_functions');
@@ -942,26 +945,45 @@ async function handleMagicAttack(interaction, attackerData, targetData, attacker
 
 async function handleClearMind(interaction, attackerData, targetData, database) {
     // Clear Mind - +30 Control until end of next turn
+    await addTechniqueEffect(
+        database, 
+        attackerData.active_character_id, 
+        interaction.channel.id, 
+        'clear_mind', 
+        'control_bonus', 
+        '30', 
+        null, 
+        2 // Lasts until end of next turn (current turn + 1 more)
+    );
+
     const embed = new EmbedBuilder()
         .setColor(0x3498db)
         .setTitle('🧘 Clear Mind')
         .setDescription(`**${attackerData.name}** clears their mind and focuses!\n\n+30 Control until the end of their next turn.`)
         .setFooter({ text: 'This effect will automatically be applied to rolls.' });
 
-    // TODO: Store the Clear Mind effect in database for turn tracking
-    // For now, just show the result
     await interaction.editReply({ embeds: [embed], components: [] });
 }
 
 async function handleGuard(interaction, attackerData, targetData, database) {
     // Guard - 20% damage reduction until next turn
+    await addTechniqueEffect(
+        database, 
+        attackerData.active_character_id, 
+        interaction.channel.id, 
+        'guard', 
+        'damage_reduction', 
+        '0.2', 
+        null, 
+        1 // Lasts until start of next turn
+    );
+
     const embed = new EmbedBuilder()
         .setColor(0x2ecc71)
         .setTitle('🛡️ Guard')
         .setDescription(`**${attackerData.name}** takes a defensive stance!\n\nAll incoming damage reduced by 20% until the start of their next turn.`)
         .setFooter({ text: 'This effect will automatically be applied to incoming attacks.' });
 
-    // TODO: Store the Guard effect in database for turn tracking
     await interaction.editReply({ embeds: [embed], components: [] });
 }
 
@@ -990,7 +1012,12 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
     const attackData = {
         technique: 'heavy_blow',
         effort: effort,
-        accuracyMultiplier: accuracyMultiplier
+        accuracyMultiplier: accuracyMultiplier,
+        onDamageEffect: {
+            type: 'agility_debuff',
+            value: '0.8', // -20% = 0.8x multiplier
+            turns: 1
+        }
     };
     
     await storePendingAttack(
@@ -1034,7 +1061,8 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
     const attackData = {
         technique: 'feint',
         effort: effort,
-        accuracyMultiplier: accuracyMultiplier
+        accuracyMultiplier: accuracyMultiplier,
+        dodgePenalty: 0.5 // -0.5x penalty to dodge attempts
     };
     
     await storePendingAttack(
@@ -1096,7 +1124,8 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
     const attackData = {
         technique: 'weakpoint',
         effort: effort,
-        accuracyMultiplier: accuracyMultiplier
+        accuracyMultiplier: accuracyMultiplier,
+        percentageDamage: 0.07 // 7% of max health if not fully defended
     };
     
     await storePendingAttack(
@@ -1291,7 +1320,12 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
     const attackData = {
         technique: 'chokehold',
         effort: effort,
-        accuracyMultiplier: accuracyMultiplier
+        accuracyMultiplier: accuracyMultiplier,
+        onDamageEffect: {
+            type: 'ki_drain',
+            value: '0.08', // 8% ki drain
+            turns: 0 // Immediate effect
+        }
     };
     
     await storePendingAttack(
@@ -1329,6 +1363,17 @@ async function handleGrab(interaction, attackerData, targetData, attackerEffecti
     );
 
     // Grab - Special technique that doesn't take your turn
+    await addTechniqueEffect(
+        database, 
+        attackerData.active_character_id, 
+        interaction.channel.id, 
+        'grab', 
+        'grab_effect', 
+        attackerData.strength.toString(), 
+        targetData.active_character_id, 
+        1 // Until start of next turn
+    );
+
     const embed = new EmbedBuilder()
         .setColor(0x16a085)
         .setTitle('🤲 Grab')
@@ -1341,7 +1386,5 @@ async function handleGrab(interaction, attackerData, targetData, attackerEffecti
         )
         .setFooter({ text: 'Grab effect will be applied to all dodge attempts until your next turn.' });
 
-    // TODO: Store the grab effect in database for tracking
-    // For now, just show the result
     await interaction.editReply({ embeds: [embed], components: [] });
 }
