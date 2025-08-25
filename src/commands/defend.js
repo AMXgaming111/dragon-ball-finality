@@ -619,6 +619,15 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
                 { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true },
                 { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
             );
+    } else {
+        // Fallback for unexpected combat result types
+        defenseEmbed.setColor(0x95a5a6)
+            .setTitle('⚔️ Combat Result')
+            .setDescription(`**${defenderData.name}** attempted to dodge **${attackerData.name}**'s ${pendingAttack.attack_type} attack!`)
+            .addFields(
+                { name: 'Final Damage', value: combatResult.finalDamage ? combatResult.finalDamage.toString() : '0', inline: true },
+                { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
+            );
     }
     
     // Add health information if damage was taken
