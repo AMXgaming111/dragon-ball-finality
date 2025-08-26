@@ -217,7 +217,7 @@ async function applyEndOfTurnEffects(characterId, database) {
             LEFT JOIN character_forms cf ON c.id = cf.character_id AND cf.is_active = 1
             LEFT JOIN forms f ON cf.form_key = f.form_key
             WHERE c.id = ${paramPlaceholder}
-            GROUP BY c.id, c.character_name, c.owner_id, c.race, c.base_pl, c.strength, c.defense, c.agility, c.endurance, c.control, c.current_health, c.current_ki, c.release_percentage, c.image_url, c.ki_control, c.magic_mastery, c.primary_affinity, c.secondary_affinities, c.created_at, f.name, f.ki_drain, f.health_drain, f.strength_modifier, f.defense_modifier, f.agility_modifier, f.endurance_modifier, f.control_modifier, f.pl_modifier
+            GROUP BY c.id, c.name, c.owner_id, c.race, c.base_pl, c.strength, c.defense, c.agility, c.endurance, c.control, c.current_health, c.current_ki, c.release_percentage, c.image_url, c.ki_control, c.magic_mastery, c.primary_affinity, c.secondary_affinities, c.created_at, f.name, f.ki_drain, f.health_drain, f.strength_modifier, f.defense_modifier, f.agility_modifier, f.endurance_modifier, f.control_modifier, f.pl_modifier
         ` : `
             SELECT c.*, 
                    ${groupConcatSeparator} as racials,
@@ -246,7 +246,7 @@ async function applyEndOfTurnEffects(characterId, database) {
         return;
     }
     
-    console.log('=== APPLY END TURN EFFECTS DEBUG: Character name:', character.character_name);
+    console.log('=== APPLY END TURN EFFECTS DEBUG: Character name:', character.name);
 
     let healthChange = 0;
     let kiChange = 0;

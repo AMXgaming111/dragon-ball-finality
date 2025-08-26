@@ -1251,6 +1251,8 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
 
     // Deduct ki cost
     const newKi = currentKi - 4;
+    const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
+    const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
     await database.run(
         `UPDATE characters SET current_ki = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
         [newKi, attackerData.active_character_id]
@@ -1327,6 +1329,8 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
 
     // Deduct ki cost
     const newKi = currentKi - 4;
+    const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
+    const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
     await database.run(
         `UPDATE characters SET current_ki = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
         [newKi, attackerData.active_character_id]
@@ -1339,8 +1343,10 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
     const currentHealth = targetData.current_health || maxHealth;
     const newHealth = Math.max(0, currentHealth - damage);
     
+    const paramPlaceholder3 = database.usePostgres ? '$1' : '?';
+    const paramPlaceholder4 = database.usePostgres ? '$2' : '?';
     await database.run(
-        `UPDATE characters SET current_health = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
+        `UPDATE characters SET current_health = ${paramPlaceholder3} WHERE id = ${paramPlaceholder4}`,
         [newHealth, targetData.active_character_id]
     );
 
@@ -1383,6 +1389,8 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
 
     // Deduct ki cost
     const newKi = currentKi - 4;
+    const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
+    const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
     await database.run(
         `UPDATE characters SET current_ki = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
         [newKi, attackerData.active_character_id]
