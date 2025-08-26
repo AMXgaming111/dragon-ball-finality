@@ -375,8 +375,8 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
             .setDescription(`**${defenderData.name}** blocked **${attackerData.name}**'s ${pendingAttack.attack_type} attack!`)
             .addFields(
                 { name: 'Attack Damage', value: (combatResult.attackDamage || pendingAttack.damage).toString(), inline: true },
-                { name: 'Block Value', value: combatResult.defenseValue.toString(), inline: true },
-                { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true },
+                { name: 'Block Value', value: (combatResult.defenseValue || 0).toString(), inline: true },
+                { name: 'Final Damage', value: (combatResult.finalDamage || 0).toString(), inline: true },
                 { name: 'Block Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
             )
             .setTimestamp();
@@ -618,8 +618,8 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
             .setTitle('💨 Combat Result - Successful Dodge')
             .setDescription(`**${defenderData.name}** successfully dodged **${attackerData.name}**'s ${pendingAttack.attack_type} attack!`)
             .addFields(
-                { name: 'Attack Accuracy', value: combatResult.attackAccuracy.toString(), inline: true },
-                { name: 'Dodge Value', value: combatResult.dodgeValue.toString(), inline: true },
+                { name: 'Attack Accuracy', value: (combatResult.attackAccuracy || 0).toString(), inline: true },
+                { name: 'Dodge Value', value: (combatResult.dodgeValue || 0).toString(), inline: true },
                 { name: 'Final Damage', value: '0', inline: true },
                 { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
             );
@@ -628,10 +628,10 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
             .setTitle('⚔️ Combat Result - Failed Dodge')
             .setDescription(`**${defenderData.name}** failed to dodge **${attackerData.name}**'s ${pendingAttack.attack_type} attack but managed a last-second block!`)
             .addFields(
-                { name: 'Attack Accuracy', value: combatResult.attackAccuracy.toString(), inline: true },
-                { name: 'Dodge Value', value: combatResult.dodgeValue.toString(), inline: true },
-                { name: 'Pity Block', value: combatResult.pityBlockValue.toString(), inline: true },
-                { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true },
+                { name: 'Attack Accuracy', value: (combatResult.attackAccuracy || 0).toString(), inline: true },
+                { name: 'Dodge Value', value: (combatResult.dodgeValue || 0).toString(), inline: true },
+                { name: 'Pity Block', value: (combatResult.pityBlockValue || 0).toString(), inline: true },
+                { name: 'Final Damage', value: (combatResult.finalDamage || 0).toString(), inline: true },
                 { name: 'Dodge Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
             );
     } else if (combatResult.type === 'double_strike') {

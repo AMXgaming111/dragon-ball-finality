@@ -305,6 +305,7 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
         // Return safe default values
         return {
             type: 'error',
+            defenseValue: defenseValue || 0,
             finalDamage: 0,
             success: false
         };
