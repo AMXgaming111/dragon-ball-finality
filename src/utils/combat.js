@@ -382,6 +382,8 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
                 return combatResult; // Exit early to prevent database error
             }
             
+            const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
+            const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
             await database.run(
                 `UPDATE characters SET current_health = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
                 [newHealth, pendingAttack.target_character_id]
