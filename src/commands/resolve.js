@@ -73,7 +73,7 @@ module.exports = {
                     });
                     
                     if (newHealth <= 0) {
-                        embed.addFields({ name: 'Status', value: '💀 **DEFEATED**', inline: false });
+                        embed.addFields({ name: 'Status', value: '💀 **CRITICAL**', inline: false });
                     } else if (healthPercentage < 20) {
                         embed.addFields({ name: 'Status', value: '⚠️ **CRITICAL**', inline: false });
                     }

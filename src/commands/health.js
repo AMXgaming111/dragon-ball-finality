@@ -185,7 +185,7 @@ module.exports = {
             if (currentHealth > maxHealth) {
                 embed.addFields({ name: 'Status', value: '🔋 Overhealed', inline: false });
             } else if (currentHealth <= 0) {
-                embed.addFields({ name: 'Status', value: '💀 Critical', inline: false });
+                embed.addFields({ name: 'Status', value: '💀 **CRITICAL**', inline: false });
             } else if (currentHealthPercentage < 20) {
                 embed.addFields({ name: 'Status', value: '⚠️ Low Health', inline: false });
             }
