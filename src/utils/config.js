@@ -12,7 +12,7 @@ module.exports = {
     racials: {
         zenkai: {
             name: 'Zenkai',
-            description: 'When in turned combat their Effective PL will increase by 10% (Of their Base PL) per round if the last enemy they hit had a higher effective PL.',
+            description: 'When in turned combat their Effective PL increases by 30% (of Base PL) per turn when facing stronger enemies. Continues until your PL equals/exceeds theirs. At ≤20% health, gains are boosted by 1.4x.',
             defaultRace: 'Saiyan',
             tag: 'zenkai'
         },

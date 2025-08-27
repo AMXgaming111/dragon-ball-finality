@@ -180,8 +180,43 @@ function calculateMaxAffordableMultiplier(currentKi, control, effort = 2, accura
     return maxMultiplier > 0 ? maxMultiplier : 0;
 }
 
+// Calculate Zenkai bonus with health-based multiplier
+async function calculateZenkaiWithHealthMultiplier(database, characterId, baseZenkaiBonus, basePL, endurance) {
+    if (!baseZenkaiBonus || baseZenkaiBonus <= 0) {
+        return 0;
+    }
+    
+    try {
+        // Get character's current health
+        const character = await database.get('SELECT current_health FROM characters WHERE id = ?', [characterId]);
+        if (!character) return baseZenkaiBonus;
+        
+        // Calculate health percentage
+        const maxHealth = await calculateMaxHealthForCharacter(database, characterId, basePL, endurance);
+        const currentHealth = character.current_health || maxHealth;
+        const healthPercentage = (currentHealth / maxHealth) * 100;
+        
+        // Apply 1.4x multiplier if at 20% health or lower
+        if (healthPercentage <= 20) {
+            return Math.floor(baseZenkaiBonus * 1.4);
+        }
+        
+        return baseZenkaiBonus;
+    } catch (error) {
+        console.error('Error calculating Zenkai health multiplier:', error);
+        return baseZenkaiBonus;
+    }
+}
+
 // Calculate effective PL with automatic release percentage lookup
 async function calculateEffectivePLWithRelease(database, characterId, basePL, kiPercentage, formMultiplier = 1, hasArcosianResilience = false, zenkaiBonus = 0, majinMagicBonus = 0) {
+    // Apply health-based multiplier to Zenkai bonus
+    const adjustedZenkaiBonus = await calculateZenkaiWithHealthMultiplier(database, characterId, zenkaiBonus, basePL, 
+        // We need endurance to calculate max health, but we don't have it here
+        // Let's get it from the database
+        (await database.get('SELECT endurance FROM characters WHERE id = ?', [characterId]))?.endurance || 100
+    );
+    
     // Get the character's release percentage
     const releaseData = await database.get(
         'SELECT release_percentage FROM characters WHERE id = ?',
@@ -190,7 +225,7 @@ async function calculateEffectivePLWithRelease(database, characterId, basePL, ki
     
     const releasePercentage = releaseData?.release_percentage || 100;
     
-    return calculateEffectivePL(basePL, kiPercentage, formMultiplier, hasArcosianResilience, zenkaiBonus, majinMagicBonus, releasePercentage);
+    return calculateEffectivePL(basePL, kiPercentage, formMultiplier, hasArcosianResilience, adjustedZenkaiBonus, majinMagicBonus, releasePercentage);
 }
 
 // Calculate maximum health based on base PL, endurance, and Ki Control level
@@ -656,7 +691,8 @@ module.exports = {
     enforceKiCap,
     getCurrentKiCap,
     handleMajinMagic,
-    getCombatBonuses
+    getCombatBonuses,
+    calculateZenkaiWithHealthMultiplier
 };
 
 // Technique Effects Management

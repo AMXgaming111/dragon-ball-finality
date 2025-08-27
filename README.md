@@ -24,7 +24,7 @@ A comprehensive Discord RPG bot for Dragon Ball-themed servers featuring turn-ba
 - **Blowback Damage**: High-effort attacks can damage the attacker
 
 ### 🧬 Racial Abilities
-- **🦍 Saiyan - Zenkai**: PL increases when hitting stronger opponents
+- **🦍 Saiyan - Zenkai**: PL increases by 30% (of base) when facing stronger opponents. Continues until PL equals/exceeds theirs. At ≤20% health: 1.4x multiplier.
 - **👤 Human - Human Spirit**: Ki cap reduction from health loss is halved
 - **🟢 Namekian - Physiology**: Giant form and manual regeneration abilities
 - **🟣 Synthetic Majin - Regeneration**: Automatic health regeneration per turn

@@ -513,23 +513,46 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
                 `, [characterId]);
 
                 // Get current combat bonuses
-                const { getCombatBonuses, calculateEffectivePL } = require('../utils/calculations');
+                const { getCombatBonuses, calculateEffectivePL, calculateMaxHealthForCharacter, calculateZenkaiWithHealthMultiplier } = require('../utils/calculations');
                 const bonuses = await getCombatBonuses(database, characterId, channelId);
+
+                // Calculate health-adjusted Zenkai bonus for comparison
+                const adjustedZenkaiBonus = await calculateZenkaiWithHealthMultiplier(
+                    database, 
+                    characterId, 
+                    bonuses.zenkaiBonus || 0, 
+                    character.base_pl, 
+                    character.endurance
+                );
 
                 const charEffectivePL = calculateEffectivePL(
                     character.base_pl,
                     kiPercentage,
                     formMultiplier,
                     hasArcosianResilience !== null,
-                    bonuses.zenkaiBonus,
+                    adjustedZenkaiBonus,
                     bonuses.majinMagicBonus
                 );
 
                 // Check if the last enemy hit had higher effective PL than the character
+                // Continue gaining Zenkai until character's effective PL equals or exceeds opponent's
                 if (combatState.last_enemy_pl > charEffectivePL) {
-                    // Apply 10% base PL bonus
-                    const zenkaiGain = Math.floor(character.base_pl * 0.10);
-                    const newZenkaiBonus = (bonuses.zenkaiBonus || 0) + zenkaiGain;
+                    // Calculate health percentage for low health multiplier
+                    const maxHealth = await calculateMaxHealthForCharacter(database, characterId, character.base_pl, character.endurance);
+                    const currentHealth = character.current_health || maxHealth;
+                    const healthPercentage = (currentHealth / maxHealth) * 100;
+                    const isLowHealth = healthPercentage <= 20;
+                    
+                    // Apply 30% base PL bonus (buffed from 10%)
+                    let zenkaiGain = Math.floor(character.base_pl * 0.30);
+                    
+                    // Apply 1.4x multiplier if at low health (20% or lower)
+                    if (isLowHealth) {
+                        zenkaiGain = Math.floor(zenkaiGain * 1.4);
+                    }
+                    
+                    const baseZenkaiBonus = bonuses.zenkaiBonus || 0;
+                    const newZenkaiBonus = baseZenkaiBonus + zenkaiGain;
                     
                     // Update combat state
                     await database.run(
@@ -537,7 +560,15 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
                         [newZenkaiBonus, characterId, channelId]
                     );
 
-                    console.log(`Zenkai activated for character ${characterId}: +${zenkaiGain} PL (Total Zenkai: ${newZenkaiBonus})`);
+                    console.log(`Zenkai activated for character ${characterId}:`);
+                    console.log(`  - Enemy PL: ${combatState.last_enemy_pl}, Character PL: ${charEffectivePL}`);
+                    console.log(`  - Base gain: ${Math.floor(character.base_pl * 0.30)} PL (30% of ${character.base_pl})`);
+                    console.log(`  - Health: ${healthPercentage.toFixed(1)}% ${isLowHealth ? '(LOW HEALTH 1.4x MULTIPLIER APPLIED)' : ''}`);
+                    console.log(`  - Final gain: +${zenkaiGain} PL`);
+                    console.log(`  - Total Zenkai: ${baseZenkaiBonus} -> ${newZenkaiBonus} PL`);
+                    if (isLowHealth) {
+                        console.log(`  - Low health multiplier applied (≤20% HP): 1.4x bonus`);
+                    }
                 }
             }
         } catch (error) {
