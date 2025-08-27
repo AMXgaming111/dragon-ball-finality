@@ -1341,7 +1341,7 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
     // Apply damage immediately since counter is unblockable/undodgeable
     const maxHealth = await calculateMaxHealthForCharacter(database, targetData.active_character_id, targetData.base_pl, targetData.endurance);
     const currentHealth = targetData.current_health || maxHealth;
-    const newHealth = Math.max(0, currentHealth - damage);
+    const newHealth = currentHealth - damage;
     
     const paramPlaceholder3 = database.usePostgres ? '$1' : '?';
     const paramPlaceholder4 = database.usePostgres ? '$2' : '?';

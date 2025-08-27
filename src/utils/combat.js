@@ -110,7 +110,7 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
                 targetData.endurance
             );
             const currentHealth = targetData.current_health || maxHealth;
-            const newHealth = Math.max(0, currentHealth - totalFinalDamage);
+            const newHealth = currentHealth - totalFinalDamage;
             
             // Safety check to prevent NaN values in database
             if (isNaN(newHealth) || isNaN(targetData.active_character_id)) {

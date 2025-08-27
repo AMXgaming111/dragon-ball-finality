@@ -41,7 +41,7 @@ module.exports = {
                     // Apply full damage (undefended attack)
                     const maxHealth = await calculateMaxHealthForCharacter(attack.target_character_id);
                     const currentHealth = targetData.current_health || maxHealth;
-                    const newHealth = Math.max(0, currentHealth - attack.damage);
+                    const newHealth = currentHealth - attack.damage;
 
                     await database.run(
                         'UPDATE characters SET current_health = ? WHERE id = ?',
