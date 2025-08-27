@@ -367,6 +367,25 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     if (combatResult.type === 'weakpoint_block') {
         // Use the specialized combat result embed for weakpoint
         defenseEmbed = createCombatResultEmbed(attackerData.name, defenderData.name, combatResult, pendingAttack.attack_type);
+    } else if (combatResult.type === 'double_strike') {
+        // Handle Double Strike blocking
+        const strike1Block = combatResult.strike1.block || 0;
+        const strike2Block = combatResult.strike2.block || 0;
+        const totalBlockValue = strike1Block + strike2Block;
+        
+        defenseEmbed = new EmbedBuilder()
+            .setColor(0x95a5a6)
+            .setTitle('🛡 Combat Result - Block vs Double Strike')
+            .setDescription(`**${defenderData.name}** blocked **${attackerData.name}**'s double strike attack!`)
+            .addFields(
+                { name: 'Total Attack Damage', value: combatResult.totalDamage.toString(), inline: true },
+                { name: 'Total Block Value', value: totalBlockValue.toString(), inline: true },
+                { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true },
+                { name: 'Strike 1', value: `${combatResult.strike1.damage} dmg → ${combatResult.strike1.finalDamage} final`, inline: true },
+                { name: 'Strike 2', value: `${combatResult.strike2.damage} dmg → ${combatResult.strike2.finalDamage} final`, inline: true },
+                { name: 'Block Type', value: isBasic ? 'Basic' : (isMultiplier ? `*${modifier}` : `+${modifier}`), inline: true }
+            )
+            .setTimestamp();
     } else {
         // Create detailed defense result embed for regular attacks
         defenseEmbed = new EmbedBuilder()

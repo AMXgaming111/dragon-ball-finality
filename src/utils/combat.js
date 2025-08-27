@@ -40,14 +40,18 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
             };
         }
     } else { // block
-        const finalDamage1 = Math.max(0, damage1 - Math.floor(defenseValue / 2)); // Split block between strikes
+        // For double strike blocking, each strike can be blocked by the full defense value
+        // but the effectiveness is reduced since defending against two attacks is harder
+        const blockEffectiveness = 0.75; // 75% effectiveness when blocking double strikes
+        const effectiveBlockValue = Math.floor(defenseValue * blockEffectiveness);
+        const finalDamage1 = Math.max(0, damage1 - effectiveBlockValue);
         totalFinalDamage += finalDamage1;
         
         strike1Result = {
             accuracy: accuracy1,
             hit: true,
             damage: damage1,
-            block: Math.floor(defenseValue / 2),
+            block: effectiveBlockValue,
             finalDamage: finalDamage1
         };
     }
@@ -80,14 +84,17 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
             };
         }
     } else { // block
-        const finalDamage2 = Math.max(0, damage2 - Math.floor(defenseValue / 2)); // Split block between strikes
+        // Apply the same block effectiveness to the second strike
+        const blockEffectiveness = 0.75; // 75% effectiveness when blocking double strikes
+        const effectiveBlockValue = Math.floor(defenseValue * blockEffectiveness);
+        const finalDamage2 = Math.max(0, damage2 - effectiveBlockValue);
         totalFinalDamage += finalDamage2;
         
         strike2Result = {
             accuracy: accuracy2,
             hit: true,
             damage: damage2,
-            block: Math.floor(defenseValue / 2),
+            block: effectiveBlockValue,
             finalDamage: finalDamage2
         };
     }
