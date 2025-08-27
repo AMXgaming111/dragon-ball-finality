@@ -39,7 +39,7 @@ module.exports = {
                     }
 
                     // Apply full damage (undefended attack)
-                    const maxHealth = await calculateMaxHealthForCharacter(attack.target_character_id);
+                    const maxHealth = await calculateMaxHealthForCharacter(database, attack.target_character_id, targetData.base_pl, targetData.endurance);
                     const currentHealth = targetData.current_health || maxHealth;
                     const newHealth = currentHealth - attack.damage;
 

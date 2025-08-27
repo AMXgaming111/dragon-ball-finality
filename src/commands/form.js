@@ -86,14 +86,14 @@ module.exports = {
                 if (formData.health_activation_cost) {
                     healthCost = formData.health_activation_cost;
                     if (formData.health_activation_cost_percentage) {
-                        const maxHealth = await calculateMaxHealthForCharacter(userData.id);
+                        const maxHealth = await calculateMaxHealthForCharacter(database, userData.active_character_id, userData.base_pl, userData.endurance);
                         healthCost = Math.floor(maxHealth * (healthCost / 100));
                     }
                 }
 
                 // Check if character has enough resources
                 const currentKi = userData.current_ki || userData.endurance;
-                const maxHealth = await calculateMaxHealthForCharacter(userData.id);
+                const maxHealth = await calculateMaxHealthForCharacter(database, userData.active_character_id, userData.base_pl, userData.endurance);
                 const currentHealth = userData.current_health || maxHealth;
 
                 if (kiCost > 0 && currentKi < kiCost) {

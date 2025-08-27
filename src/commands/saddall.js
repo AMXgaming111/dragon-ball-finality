@@ -78,7 +78,7 @@ module.exports = {
             // If endurance was modified, may need to update health/ki
             if (newValues.endurance !== oldValues.endurance) {
                 // Recalculate max health and ki based on new endurance
-                const newMaxHealth = await calculateMaxHealthForCharacter(characterId);
+                const newMaxHealth = await calculateMaxHealthForCharacter(database, characterId, userData.base_pl, newValues.endurance);
                 const newMaxKi = newValues.endurance;
                 
                 // If current health/ki are null, set them to new maximums
