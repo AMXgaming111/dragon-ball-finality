@@ -784,6 +784,9 @@ async function calculateEffectiveStats(database, characterId, channelId, baseSta
             case 'agility_multiplier':
                 effectiveStats.agility *= parseFloat(effect.effect_value);
                 break;
+            case 'agility_debuff':
+                effectiveStats.agility *= parseFloat(effect.effect_value);
+                break;
             // Add more stat modifications as needed
         }
     }

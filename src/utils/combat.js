@@ -435,6 +435,27 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
                 [newHealth, pendingAttack.target_character_id]
             );
             
+            // Process onDamageEffect if damage was actually dealt and effect exists
+            if (reducedDamage > 0 && pendingAttack.attack_data && pendingAttack.attack_data.onDamageEffect) {
+                const effect = pendingAttack.attack_data.onDamageEffect;
+                const { addTechniqueEffect } = require('./calculations');
+                
+                try {
+                    await addTechniqueEffect(
+                        database,
+                        pendingAttack.target_character_id, // Effect goes on target
+                        pendingAttack.channel_id,
+                        pendingAttack.attack_data.technique || 'unknown', // Technique name
+                        effect.type, // e.g., 'agility_debuff'
+                        effect.value, // e.g., '0.8'
+                        null, // targetCharacterId (not needed for debuffs)
+                        effect.turns || 1 // Duration
+                    );
+                } catch (error) {
+                    console.error('Error applying onDamageEffect:', error);
+                }
+            }
+            
             // Handle Majin Magic for attacker if damage was dealt
             if (finalDamage > 0) {
                 try {
