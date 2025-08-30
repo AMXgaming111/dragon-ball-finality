@@ -347,7 +347,7 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     // Gain ki for basic blocks (after roll)
     let finalKiAfterAll = newKi;
     if (isBasic) {
-        const basicKiGain = Math.floor(defenderData.endurance * 0.05);
+        const basicKiGain = Math.max(1, Math.floor(defenderData.endurance * 0.05));
         const kiCap = await getCurrentKiCap(database, defenderData.active_character_id);
         const finalKi = Math.min(kiCap, newKi + basicKiGain); // Respect health cap
         await database.run(
@@ -614,7 +614,7 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     // Gain ki for basic dodges (after roll)
     let finalKiAfterAll = newKi;
     if (isBasic) {
-        const basicKiGain = Math.floor(defenderData.endurance * 0.05);
+        const basicKiGain = Math.max(1, Math.floor(defenderData.endurance * 0.05));
         const kiCap = await getCurrentKiCap(database, defenderData.active_character_id);
         const finalKi = Math.min(kiCap, newKi + basicKiGain); // Respect health cap
         await database.run(

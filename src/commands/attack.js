@@ -362,8 +362,8 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
     let kiChange = 0;
 
     if ((additive === 0 || isBasic) && accuracyMultiplier === 1) {
-        // Basic attack - gain 5% ki (but still apply effort cost if any)
-        kiChange = Math.floor(attackerData.endurance * 0.05);
+        // Basic attack - gain 5% ki (minimum 1 ki) but still apply effort cost if any
+        kiChange = Math.max(1, Math.floor(attackerData.endurance * 0.05));
         if (effortKiCost > 0) {
             kiChange -= Math.floor(attackerData.endurance * (effortKiCost / 100));
         } else if (effortKiCost < 0) {
