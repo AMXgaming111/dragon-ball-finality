@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateMaxHealth, calculateMaxHealthForCharacter, generateHealthBar, generateKiBar, handleMajinMagic, getCombatBonuses } = require('./calculations');
+const { calculateMaxHealth, calculateMaxHealthForCharacter, generateHealthBar, generateKiBar, handleMajinMagic, getCombatBonuses, calculateTechniqueDamageReduction } = require('./calculations');
 
 /**
  * Resolve Double Strike technique with separate strike handling
@@ -103,6 +103,10 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
     if (totalFinalDamage > 0) {
         const targetData = await database.getUserWithActiveCharacter(pendingAttack.target_user_id);
         if (targetData) {
+            // Apply technique damage reduction (e.g., Guard effect)
+            const damageReduction = await calculateTechniqueDamageReduction(database, targetData.active_character_id, pendingAttack.channel_id);
+            const reducedDamage = Math.floor(totalFinalDamage * (1 - damageReduction));
+            
             const maxHealth = await calculateMaxHealthForCharacter(
                 database, 
                 targetData.active_character_id, 
@@ -110,7 +114,7 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
                 targetData.endurance
             );
             const currentHealth = targetData.current_health || maxHealth;
-            const newHealth = currentHealth - totalFinalDamage;
+            const newHealth = currentHealth - reducedDamage;
             
             // Safety check to prevent NaN values in database
             if (isNaN(newHealth) || isNaN(targetData.active_character_id)) {
@@ -118,6 +122,8 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
                     newHealth,
                     currentHealth,
                     totalFinalDamage,
+                    reducedDamage,
+                    damageReduction,
                     targetCharacterId: targetData.active_character_id,
                     maxHealth
                 });
@@ -128,6 +134,8 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
                     strike2: strike2Result,
                     totalDamage: damage1 + damage2,
                     finalDamage: totalFinalDamage,
+                    reducedDamage: reducedDamage,
+                    damageReduction: damageReduction,
                     success: totalFinalDamage < (damage1 + damage2)
                 };
             }
@@ -242,8 +250,12 @@ async function resolveWeakpoint(database, pendingAttack, defenseType, defenseVal
     if (finalDamage > 0) {
         const targetData = await database.getUserWithActiveCharacter(pendingAttack.target_user_id);
         if (targetData) {
+            // Apply technique damage reduction (e.g., Guard effect)
+            const damageReduction = await calculateTechniqueDamageReduction(database, pendingAttack.target_character_id, pendingAttack.channel_id);
+            const reducedDamage = Math.floor(finalDamage * (1 - damageReduction));
+            
             const currentHealth = targetData.current_health || targetMaxHealth;
-            const newHealth = currentHealth - finalDamage; // Allow negative health
+            const newHealth = currentHealth - reducedDamage; // Allow negative health
             
             const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
             const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
@@ -331,42 +343,66 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
     if (defenseType === 'block') {
         // Block reduces damage
         finalDamage = Math.max(0, pendingAttack.damage - defenseValue);
-        combatResult = {
-            type: 'block',
-            attackDamage: pendingAttack.damage,
-            defenseValue: defenseValue,
-            finalDamage: finalDamage,
-            success: defenseValue > 0
-        };
     } else if (defenseType === 'dodge') {
         if (dodgeValue > pendingAttack.accuracy) {
             // Successful dodge - no damage
             finalDamage = 0;
-            combatResult = {
-                type: 'dodge',
-                attackAccuracy: pendingAttack.accuracy,
-                dodgeValue: dodgeValue,
-                finalDamage: 0,
-                success: true
-            };
         } else {
             // Failed dodge - pity block with 50-60% defense roll
             const pityBlockMultiplier = 0.5 + (Math.random() * 0.1); // 50-60%
             const pityBlockValue = Math.floor(defenseValue * pityBlockMultiplier);
             finalDamage = Math.max(0, pendingAttack.damage - pityBlockValue);
+        }
+    }
+    
+    // Apply technique damage reduction (e.g., Guard effect) to the final damage
+    let damageReduction = 0;
+    let reducedDamage = finalDamage;
+    if (finalDamage > 0) {
+        damageReduction = await calculateTechniqueDamageReduction(database, pendingAttack.target_character_id, pendingAttack.channel_id);
+        reducedDamage = Math.floor(finalDamage * (1 - damageReduction));
+    }
+    
+    // Create combat result with reduction info
+    if (defenseType === 'block') {
+        combatResult = {
+            type: 'block',
+            attackDamage: pendingAttack.damage,
+            defenseValue: defenseValue,
+            finalDamage: finalDamage,
+            reducedDamage: reducedDamage,
+            damageReduction: damageReduction,
+            success: defenseValue > 0
+        };
+    } else if (defenseType === 'dodge') {
+        if (dodgeValue > pendingAttack.accuracy) {
+            combatResult = {
+                type: 'dodge',
+                attackAccuracy: pendingAttack.accuracy,
+                dodgeValue: dodgeValue,
+                finalDamage: 0,
+                reducedDamage: 0,
+                damageReduction: 0,
+                success: true
+            };
+        } else {
+            const pityBlockMultiplier = 0.5 + (Math.random() * 0.1);
+            const pityBlockValue = Math.floor(defenseValue * pityBlockMultiplier);
             combatResult = {
                 type: 'failed_dodge',
                 attackAccuracy: pendingAttack.accuracy,
                 dodgeValue: dodgeValue,
                 pityBlockValue: pityBlockValue,
                 finalDamage: finalDamage,
+                reducedDamage: reducedDamage,
+                damageReduction: damageReduction,
                 success: false
             };
         }
     }
     
     // Apply damage to target if any
-    if (finalDamage > 0) {
+    if (reducedDamage > 0) {
         const targetData = await database.getUserWithActiveCharacter(pendingAttack.target_user_id);
         if (targetData) {
             const maxHealth = await calculateMaxHealthForCharacter(
@@ -376,7 +412,7 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
                 targetData.endurance
             );
             const currentHealth = targetData.current_health || maxHealth;
-            const newHealth = currentHealth - finalDamage; // Allow negative health
+            const newHealth = currentHealth - reducedDamage; // Allow negative health
             
             // Safety check to prevent NaN values in database
             if (isNaN(newHealth) || isNaN(pendingAttack.target_character_id)) {
@@ -384,6 +420,8 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
                     newHealth,
                     currentHealth,
                     finalDamage,
+                    reducedDamage,
+                    damageReduction,
                     targetCharacterId: pendingAttack.target_character_id,
                     maxHealth
                 });
