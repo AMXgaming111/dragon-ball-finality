@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
+// Dragon Ball Finality Bot v2.1.3 - Latest deployment
 // Railway health check server
 if (process.env.RAILWAY_ENVIRONMENT || process.env.PORT) {
     const express = require('express');
