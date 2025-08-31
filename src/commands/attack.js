@@ -16,7 +16,8 @@ const {
     calculateMaxHealthForCharacter,
     addTechniqueEffect,
     getTechniqueEffects,
-    calculateEffectiveStats
+    calculateEffectiveStats,
+    handleMajinMagic
 } = require('../utils/calculations');
 const { storePendingAttack, cleanupExpiredAttacks, addKiDisplay } = require('../utils/combat');
 const { autoManageTurnOrder } = require('../../helper_functions');
@@ -142,6 +143,7 @@ module.exports = {
                 .setColor(0xe74c3c)
                 .setTitle('🥊 How would you like to attack?')
                 .setDescription(`**${attackerData.name}** is attacking **${targetData.name}**`)
+                .setThumbnail(attackerData.image_url || require('../utils/config').defaultCharacterImage)
                 .addFields(
                     { name: 'Attacker', value: `${attackerData.name} (PL: ${attackerEffectivePL})`, inline: true },
                     { name: 'Target', value: `${targetData.name}`, inline: true },
@@ -251,6 +253,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         .setColor(0xf39c12)
         .setTitle('💪 Physical Combat')
         .setDescription('How would you like to proceed?')
+        .setThumbnail(attackerData.image_url || require('../utils/config').defaultCharacterImage)
         .addFields({ name: 'Max Additive', value: `Your maximum additive is **+${maxAdditive}**`, inline: false });
 
     const attackButton = new ButtonBuilder()
@@ -307,6 +310,7 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
         .setColor(0xf39c12)
         .setTitle('💪 Physical Attack')
         .setDescription('How would you like to modify your physical attack?\n(Use `+<number>` for additive, or `0` for basic):')
+        .setThumbnail(attackerData.image_url || require('../utils/config').defaultCharacterImage)
         .addFields({ name: 'Max Additive', value: `Your maximum additive is **+${maxAdditive}**`, inline: false });    await interaction.update({ embeds: [embed], components: [] });
 
     // Wait for user input
@@ -362,12 +366,12 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
     let kiChange = 0;
 
     if ((additive === 0 || isBasic) && accuracyMultiplier === 1) {
-        // Basic attack - gain 5% ki (minimum 1 ki) but still apply effort cost if any
+        // Basic attack - gain 5% ki (but still apply effort cost if any)
         kiChange = Math.max(1, Math.floor(attackerData.endurance * 0.05));
         if (effortKiCost > 0) {
-            kiChange -= Math.floor(attackerData.endurance * (effortKiCost / 100));
+            kiChange -= Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
         } else if (effortKiCost < 0) {
-            kiChange += Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100));
+            kiChange += Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
         }
     } else {
         // Modified attack - calculate ki costs
@@ -380,9 +384,9 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
         
         // Apply effort ki cost/gain
         if (effortKiCost > 0) {
-            kiChange -= Math.floor(attackerData.endurance * (effortKiCost / 100));
+            kiChange -= Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
         } else if (effortKiCost < 0) {
-            kiChange += Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100));
+            kiChange += Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
         }
         
         // Check if attacker has enough ki for the costs
@@ -542,6 +546,7 @@ async function handleTechniqueSelection(interaction, attackerData, targetData, a
             '**Counter** (`counter`) - Unblockable/undodgeable vs last attacker (4 ki)\n' +
             '**Chokehold** (`chold`) - Enemy loses 8% ki if damaged (4 ki)\n' +
             '**Grab** (`grab`) - Force strength vs dodge attempts (4 ki)')
+        .setThumbnail(attackerData.image_url || require('../utils/config').defaultCharacterImage)
         .setFooter({ text: 'Type the technique key (e.g., "cmind" for Clear Mind)' });
 
     await interaction.update({ embeds: [embed], components: [] });
@@ -741,7 +746,7 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     
     // Add effort ki cost
     if (effortKiCost > 0) {
-        totalKiCost += Math.floor(attackerData.endurance * (effortKiCost / 100));
+        totalKiCost += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
     }
     
     // Check if attacker has enough ki for all costs
@@ -1152,13 +1157,19 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
 }
 
 async function handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
-    // Check ki cost (4 ki, unaffected by control)
+    // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
-    if (currentKi < 4) {
+    const effortKiCost = getEffortKiCost(effort);
+    let totalRequiredKi = 4; // Base cost
+    if (effortKiCost > 0) {
+        totalRequiredKi += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
+    }
+    
+    if (currentKi < totalRequiredKi) {
         const errorEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)
             .setTitle('❌ Insufficient Ki')
-            .setDescription('Not enough ki! Weakpoint requires 4 ki.');
+            .setDescription(`Not enough ki! Weakpoint requires ${totalRequiredKi} ki (4 base + ${totalRequiredKi - 4} effort).`);
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
@@ -1173,8 +1184,16 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
     const targetMaxHealth = await calculateMaxHealthForCharacter(database, targetData.active_character_id, targetData.base_pl, targetData.endurance);
     const actualDamage = Math.floor(targetMaxHealth * 0.07); // 7% of max health
 
+    // Calculate total ki cost including effort (use the same calculation as the check above)
+    let totalKiCost = 4; // Base cost
+    if (effortKiCost > 0) {
+        totalKiCost += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
+    } else if (effortKiCost < 0) {
+        totalKiCost -= Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
+    }
+    
     // Deduct ki cost
-    const newKi = currentKi - 4;
+    const newKi = currentKi - totalKiCost;
     const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
     const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
     await database.run(
@@ -1227,13 +1246,19 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
 }
 
 async function handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
-    // Check ki cost (4 ki, unaffected by control)
+    // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
-    if (currentKi < 4) {
+    const effortKiCost = getEffortKiCost(effort);
+    let totalRequiredKi = 4; // Base cost
+    if (effortKiCost > 0) {
+        totalRequiredKi += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
+    }
+    
+    if (currentKi < totalRequiredKi) {
         const errorEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)
             .setTitle('❌ Insufficient Ki')
-            .setDescription('Not enough ki! Double Strike requires 4 ki.');
+            .setDescription(`Not enough ki! Double Strike requires ${totalRequiredKi} ki (4 base + ${totalRequiredKi - 4} effort).`);
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
@@ -1249,8 +1274,16 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
     const accuracy1 = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
     const accuracy2 = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
 
+    // Calculate total ki cost including effort (use the same calculation as the check above)
+    let totalKiCost = 4; // Base cost
+    if (effortKiCost > 0) {
+        totalKiCost += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
+    } else if (effortKiCost < 0) {
+        totalKiCost -= Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
+    }
+
     // Deduct ki cost
-    const newKi = currentKi - 4;
+    const newKi = currentKi - totalKiCost;
     const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
     const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
     await database.run(
@@ -1307,13 +1340,19 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
 }
 
 async function handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
-    // Check ki cost (4 ki, unaffected by control)
+    // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
-    if (currentKi < 4) {
+    const effortKiCost = getEffortKiCost(effort);
+    let totalRequiredKi = 4; // Base cost
+    if (effortKiCost > 0) {
+        totalRequiredKi += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
+    }
+    
+    if (currentKi < totalRequiredKi) {
         const errorEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)
             .setTitle('❌ Insufficient Ki')
-            .setDescription('Not enough ki! Counter requires 4 ki.');
+            .setDescription(`Not enough ki! Counter requires ${totalRequiredKi} ki (4 base + ${totalRequiredKi - 4} effort).`);
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
@@ -1327,8 +1366,16 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
     const damage = rollWithEffort(baseDamage, effort);
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
 
+    // Calculate total ki cost including effort (use the same calculation as the check above)
+    let totalKiCost = 4; // Base cost
+    if (effortKiCost > 0) {
+        totalKiCost += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
+    } else if (effortKiCost < 0) {
+        totalKiCost -= Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
+    }
+
     // Deduct ki cost
-    const newKi = currentKi - 4;
+    const newKi = currentKi - totalKiCost;
     const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
     const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
     await database.run(
@@ -1341,7 +1388,7 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
     // Apply damage immediately since counter is unblockable/undodgeable
     const maxHealth = await calculateMaxHealthForCharacter(database, targetData.active_character_id, targetData.base_pl, targetData.endurance);
     const currentHealth = targetData.current_health || maxHealth;
-    const newHealth = currentHealth - damage;
+    const newHealth = Math.max(0, currentHealth - damage);
     
     const paramPlaceholder3 = database.usePostgres ? '$1' : '?';
     const paramPlaceholder4 = database.usePostgres ? '$2' : '?';
@@ -1349,6 +1396,16 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
         `UPDATE characters SET current_health = ${paramPlaceholder3} WHERE id = ${paramPlaceholder4}`,
         [newHealth, targetData.active_character_id]
     );
+
+    // Handle Majin Magic for attacker if damage was dealt
+    if (damage > 0) {
+        try {
+            const healthPercentageLost = (damage / maxHealth) * 100;
+            await handleMajinMagic(database, attackerData.active_character_id, healthPercentageLost, interaction.channel.id);
+        } catch (error) {
+            console.error('Error handling Majin Magic in counter attack:', error);
+        }
+    }
 
     // Get ki information for display
     const kiPercentage = Math.max(0, (newKi / attackerData.endurance) * 100);
@@ -1370,13 +1427,19 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
 }
 
 async function handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
-    // Check ki cost (4 ki, unaffected by control)
+    // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
-    if (currentKi < 4) {
+    const effortKiCost = getEffortKiCost(effort);
+    let totalRequiredKi = 4; // Base cost
+    if (effortKiCost > 0) {
+        totalRequiredKi += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
+    }
+    
+    if (currentKi < totalRequiredKi) {
         const errorEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)
             .setTitle('❌ Insufficient Ki')
-            .setDescription('Not enough ki! Chokehold requires 4 ki.');
+            .setDescription(`Not enough ki! Chokehold requires ${totalRequiredKi} ki (4 base + ${totalRequiredKi - 4} effort).`);
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
@@ -1387,8 +1450,16 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
     const damage = rollWithEffort(baseDamage, effort);
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
 
+    // Calculate total ki cost including effort (use the same calculation as the check above)
+    let totalKiCost = 4; // Base cost
+    if (effortKiCost > 0) {
+        totalKiCost += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
+    } else if (effortKiCost < 0) {
+        totalKiCost -= Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
+    }
+
     // Deduct ki cost
-    const newKi = currentKi - 4;
+    const newKi = currentKi - totalKiCost;
     const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
     const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
     await database.run(
@@ -1443,18 +1514,32 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
 }
 
 async function handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
-    // Check ki cost (4 ki, unaffected by control)
+    // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
-    if (currentKi < 4) {
+    const effortKiCost = getEffortKiCost(effort);
+    let totalRequiredKi = 4; // Base cost
+    if (effortKiCost > 0) {
+        totalRequiredKi += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
+    }
+    
+    if (currentKi < totalRequiredKi) {
         const errorEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)
             .setTitle('❌ Insufficient Ki')
-            .setDescription('Not enough ki! Grab requires 4 ki.');
+            .setDescription(`Not enough ki! Grab requires ${totalRequiredKi} ki (4 base + ${totalRequiredKi - 4} effort).`);
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
+    // Calculate total ki cost including effort (use the same calculation as the check above)
+    let totalKiCost = 4; // Base cost
+    if (effortKiCost > 0) {
+        totalKiCost += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
+    } else if (effortKiCost < 0) {
+        totalKiCost -= Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
+    }
+
     // Deduct ki cost
-    const newKi = currentKi - 4;
+    const newKi = currentKi - totalKiCost;
     const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
     const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
     await database.run(

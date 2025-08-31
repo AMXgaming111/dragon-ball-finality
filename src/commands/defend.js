@@ -283,12 +283,12 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
         kiChange = -kiCost;
     }
 
-    // Apply effort ki cost/gain
+    // Apply effort ki cost/gain with minimum 1 ki
     const effortKiCost = getEffortKiCost(effort);
     if (effortKiCost > 0) {
-        kiChange -= Math.floor(defenderData.endurance * (effortKiCost / 100));
+        kiChange -= Math.max(1, Math.floor(defenderData.endurance * (effortKiCost / 100)));
     } else if (effortKiCost < 0) {
-        kiChange += Math.floor(defenderData.endurance * (Math.abs(effortKiCost) / 100));
+        kiChange += Math.max(1, Math.floor(defenderData.endurance * (Math.abs(effortKiCost) / 100)));
     }
 
     // Check if defender has enough ki for the costs
@@ -541,12 +541,12 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         kiChange = -kiCost;
     }
 
-    // Apply effort ki cost/gain
+    // Apply effort ki cost/gain with minimum 1 ki
     const effortKiCost = getEffortKiCost(effort);
     if (effortKiCost > 0) {
-        kiChange -= Math.floor(defenderData.endurance * (effortKiCost / 100));
+        kiChange -= Math.max(1, Math.floor(defenderData.endurance * (effortKiCost / 100)));
     } else if (effortKiCost < 0) {
-        kiChange += Math.floor(defenderData.endurance * (Math.abs(effortKiCost) / 100));
+        kiChange += Math.max(1, Math.floor(defenderData.endurance * (Math.abs(effortKiCost) / 100)));
     }
 
     // Check if defender has enough ki for the costs

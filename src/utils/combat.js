@@ -99,22 +99,28 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
         };
     }
     
+    // Initialize variables for health tracking
+    let maxHealth = 0;
+    let newHealth = 0;
+    let reducedDamage = 0;
+    let damageReduction = 0;
+    
     // Apply total damage
     if (totalFinalDamage > 0) {
         const targetData = await database.getUserWithActiveCharacter(pendingAttack.target_user_id);
         if (targetData) {
             // Apply technique damage reduction (e.g., Guard effect)
-            const damageReduction = await calculateTechniqueDamageReduction(database, targetData.active_character_id, pendingAttack.channel_id);
-            const reducedDamage = Math.floor(totalFinalDamage * (1 - damageReduction));
+            damageReduction = await calculateTechniqueDamageReduction(database, targetData.active_character_id, pendingAttack.channel_id);
+            reducedDamage = Math.floor(totalFinalDamage * (1 - damageReduction));
             
-            const maxHealth = await calculateMaxHealthForCharacter(
+            maxHealth = await calculateMaxHealthForCharacter(
                 database, 
                 targetData.active_character_id, 
                 targetData.base_pl, 
                 targetData.endurance
             );
             const currentHealth = targetData.current_health || maxHealth;
-            const newHealth = currentHealth - reducedDamage;
+            newHealth = currentHealth - reducedDamage;
             
             // Safety check to prevent NaN values in database
             if (isNaN(newHealth) || isNaN(targetData.active_character_id)) {
@@ -150,6 +156,16 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
             // Update ki cap based on new health percentage - automatically enforce cap
             const { enforceKiCap } = require('./calculations');
             await enforceKiCap(database, pendingAttack.target_character_id);
+            
+            // Handle Majin Magic for attacker if damage was dealt
+            if (reducedDamage > 0) {
+                try {
+                    const healthPercentageLost = (reducedDamage / maxHealth) * 100;
+                    await handleMajinMagic(database, pendingAttack.attacker_character_id, healthPercentageLost, pendingAttack.channel_id);
+                } catch (error) {
+                    console.error('Error handling Majin Magic in double strike:', error);
+                }
+            }
         }
     }
     
@@ -160,7 +176,13 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
         strike2: strike2Result,
         totalDamage: damage1 + damage2,
         finalDamage: totalFinalDamage,
-        success: totalFinalDamage < (damage1 + damage2) // Partial success if any damage reduced
+        reducedDamage: totalFinalDamage > 0 ? reducedDamage : 0,
+        damageReduction: totalFinalDamage > 0 ? damageReduction : 0,
+        success: totalFinalDamage < (damage1 + damage2), // Partial success if any damage reduced
+        healthUpdate: totalFinalDamage > 0 ? {
+            newHealth: newHealth,
+            maxHealth: maxHealth
+        } : null
     };
 }
 
@@ -265,9 +287,9 @@ async function resolveWeakpoint(database, pendingAttack, defenseType, defenseVal
             );
             
             // Handle Majin Magic for attacker if damage was dealt
-            if (finalDamage > 0) {
+            if (reducedDamage > 0) {
                 try {
-                    const healthPercentageLost = (finalDamage / targetMaxHealth) * 100;
+                    const healthPercentageLost = (reducedDamage / targetMaxHealth) * 100;
                     await handleMajinMagic(database, pendingAttack.attacker_character_id, healthPercentageLost, pendingAttack.channel_id);
                 } catch (error) {
                     console.error('Error handling Majin Magic in weakpoint resolution:', error);
@@ -457,9 +479,9 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
             }
             
             // Handle Majin Magic for attacker if damage was dealt
-            if (finalDamage > 0) {
+            if (reducedDamage > 0) {
                 try {
-                    const healthPercentageLost = (finalDamage / maxHealth) * 100;
+                    const healthPercentageLost = (reducedDamage / maxHealth) * 100;
                     await handleMajinMagic(database, pendingAttack.attacker_character_id, healthPercentageLost, pendingAttack.channel_id);
                 } catch (error) {
                     console.error('Error handling Majin Magic in combat resolution:', error);
@@ -607,6 +629,15 @@ function createCombatResultEmbed(attackerName, targetName, combatResult, attackT
                 { name: 'Dodge Value', value: combatResult.dodgeValue.toString(), inline: true },
                 { name: 'Weakpoint Damage', value: `${combatResult.actualDamage} (7% max health)`, inline: true },
                 { name: 'Final Damage', value: combatResult.finalDamage.toString(), inline: true }
+            );
+    } else if (combatResult.type === 'double_strike') {
+        embed.setColor(0xe67e22)
+            .setTitle('⚡ Double Strike Result')
+            .setDescription(`**${attackerName}** launched a double strike against **${targetName}**!`)
+            .addFields(
+                { name: 'Strike 1', value: `${combatResult.strike1.hit ? 'HIT' : 'MISS'} - ${combatResult.strike1.finalDamage} damage`, inline: true },
+                { name: 'Strike 2', value: `${combatResult.strike2.hit ? 'HIT' : 'MISS'} - ${combatResult.strike2.finalDamage} damage`, inline: true },
+                { name: 'Total Damage', value: combatResult.finalDamage.toString(), inline: true }
             );
     }
     

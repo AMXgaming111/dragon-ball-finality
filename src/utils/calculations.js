@@ -577,7 +577,7 @@ async function handleMajinMagic(db, characterId, healthPercentageLost, channelId
         // Calculate ki gain (equal to health percentage lost by defender)
         const currentKi = character.current_ki || 0;
         const maxKi = character.endurance || 100;
-        const kiGainAmount = Math.floor(maxKi * (healthPercentageLost / 100));
+        const kiGainAmount = Math.max(1, Math.floor(maxKi * (healthPercentageLost / 100)));
         
         // Get current ki cap to respect health limitations
         const kiCap = await calculateKiCap(db, character);
@@ -586,7 +586,7 @@ async function handleMajinMagic(db, characterId, healthPercentageLost, channelId
         // Calculate PL bonus (percentage of base PL equal to health percentage lost)
         const currentBonus = combatState?.majin_magic_bonus || 0;
         const maxBonus = Math.floor(character.base_pl * 0.50); // Max 50% of base PL
-        const plBonusAmount = Math.floor(character.base_pl * (healthPercentageLost / 100));
+        const plBonusAmount = Math.max(1, Math.floor(character.base_pl * (healthPercentageLost / 100)));
         
         // Ensure we don't exceed the 50% cap
         const potentialNewBonus = currentBonus + plBonusAmount;
