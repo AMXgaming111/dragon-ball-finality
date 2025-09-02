@@ -27,7 +27,7 @@ module.exports = {
     description: 'Attack another character',
     async execute(message, args, database) {
         if (args.length < 1) {
-            return message.reply('Usage: `!attack <@target>` or `!attack <modifiers> <@target>`\n\n**Combat Modifiers:**\n• `e<1-5>` - Effort level\n• `a+<number>` - Agility bonus (ki cost)\n• `a*<number>` - Accuracy multiplier (ki cost)\n\n**No-Cost Modifiers:**\n• `d+/-<number>` - Damage modifier (STR for physical, PL for ki, DEF for defense)\n• `d*/<number>` - Final roll multiplier/divisor\n• `c+/-<number>` - Control modifier\n• `c*/<number>` - Control roll multiplier/divisor\n• `ma+/-<number>` - Agility modifier for accuracy only\n• `ma*/<number>` - Accuracy roll multiplier/divisor\n\n**Attack Types:**\n• `+<number>` - Physical additive\n• `*<number>` - Ki multiplier');
+            return message.reply('Usage: `!attack <@target>` or `!attack <modifiers> <@target>`\n\n**Combat Modifiers:**\n• `e<1-5>` - Effort level\n• `a+<number>` - Agility bonus (no cost)\n• `a*<number>` - Accuracy multiplier (ki cost)\n\n**No-Cost Modifiers:**\n• `d+/-<number>` - Damage modifier (STR for physical, PL for ki, DEF for defense)\n• `d*/<number>` - Final roll multiplier/divisor\n• `c+/-<number>` - Control modifier\n• `c*/<number>` - Control roll multiplier/divisor\n• `ma+/-<number>` - Agility modifier for accuracy only\n• `ma*/<number>` - Accuracy roll multiplier/divisor\n\n**Attack Types:**\n• `+<number>` - Physical additive\n• `*<number>` - Ki multiplier');
         }
 
         // Parse arguments
