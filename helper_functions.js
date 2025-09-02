@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateKiCost, getCombatBonuses, calculateEffectivePL, decrementTechniqueEffects } = require('./src/utils/calculations');
+const { calculateKiCost, getCombatBonuses, calculateEffectivePL, decrementTechniqueEffects, calculateMaxHealthForCharacter } = require('./src/utils/calculations');
 
 /**
  * Auto-manage turn order for combat - creates or adds participants as needed
@@ -325,7 +325,7 @@ async function applyEndOfTurnEffects(characterId, database) {
             WHERE character_id = ${paramPlaceholder1} AND racial_tag = 'mregen_enhanced' AND is_active = 1
         `, [characterId]);
         
-        const maxHealth = character.base_pl * character.endurance;
+        const maxHealth = await calculateMaxHealthForCharacter(database, characterId, character.base_pl, character.endurance);
         const currentHealth = character.current_health || maxHealth;
         
         if (currentHealth < maxHealth) {

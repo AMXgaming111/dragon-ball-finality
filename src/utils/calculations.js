@@ -61,11 +61,13 @@ async function enforceKiCap(database, characterId) {
     
     if (!character) return;
     
-    const currentKi = character.current_ki || character.endurance;
+    // Handle null vs 0 ki carefully - null means max, 0 means 0
+    const currentKi = character.current_ki !== null ? character.current_ki : character.endurance;
     const kiCap = await calculateKiCap(database, character);
     
     // Only reduce ki if it's above the cap - never increase it automatically
-    if (currentKi > kiCap) {
+    // If current_ki was 0, don't treat it as max ki for cap enforcement
+    if (character.current_ki !== null && currentKi > kiCap) {
         await database.run(
             'UPDATE characters SET current_ki = ? WHERE id = ?',
             [kiCap, characterId]

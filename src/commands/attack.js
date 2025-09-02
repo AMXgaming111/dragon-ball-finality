@@ -116,7 +116,7 @@ module.exports = {
             }
 
             // Calculate attacker's effective PL and stats
-            const attackerKiPercentage = attackerData.current_ki ? (attackerData.current_ki / attackerData.endurance) * 100 : 100;
+            const attackerKiPercentage = attackerData.current_ki !== null ? (attackerData.current_ki / attackerData.endurance) * 100 : 100;
             
             // Check for Arcosian Resilience racial
             const hasArcosianResilience = await database.get(`
