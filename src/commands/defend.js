@@ -24,10 +24,66 @@ module.exports = {
     async execute(message, args, database) {
         let targetMention;
         let effort = 2; // Default normal effort
+        
+        // New no-cost modifiers
+        let mainStatModifier = 0; // m+/- modifier for main stat (defense)
+        let rollMultiplier = 1; // m*/ modifier for final roll
+        let accuracyAgilityModifier = 0; // ma+/- modifier for agility in accuracy
+        let accuracyRollMultiplier = 1; // ma*/ modifier for accuracy roll
 
-        // Parse effort modifier
+        // Parse modifiers
         args.forEach(arg => {
-            if (arg.startsWith('e')) {
+            if (arg.startsWith('ma') && !arg.startsWith('<@')) {
+                // ma modifiers - accuracy-specific no-cost modifiers
+                const modifierPart = arg.slice(2); // Get everything after 'ma'
+                
+                if (modifierPart.startsWith('+')) {
+                    const agBonus = parseInt(modifierPart.slice(1));
+                    if (!isNaN(agBonus) && agBonus > 0) {
+                        accuracyAgilityModifier = agBonus;
+                    }
+                } else if (modifierPart.startsWith('-')) {
+                    const agPenalty = parseInt(modifierPart.slice(1));
+                    if (!isNaN(agPenalty) && agPenalty > 0) {
+                        accuracyAgilityModifier = -agPenalty;
+                    }
+                } else if (modifierPart.startsWith('*')) {
+                    const mult = parseFloat(modifierPart.slice(1));
+                    if (!isNaN(mult) && mult > 0) {
+                        accuracyRollMultiplier = mult;
+                    }
+                } else if (modifierPart.startsWith('/')) {
+                    const div = parseFloat(modifierPart.slice(1));
+                    if (!isNaN(div) && div > 0) {
+                        accuracyRollMultiplier = 1 / div;
+                    }
+                }
+            } else if (arg.startsWith('m') && !arg.startsWith('<@') && !arg.startsWith('ma')) {
+                // m modifiers - main stat no-cost modifiers (defense stat for defend)
+                const modifierPart = arg.slice(1); // Get everything after 'm'
+                
+                if (modifierPart.startsWith('+')) {
+                    const statBonus = parseInt(modifierPart.slice(1));
+                    if (!isNaN(statBonus) && statBonus > 0) {
+                        mainStatModifier = statBonus;
+                    }
+                } else if (modifierPart.startsWith('-')) {
+                    const statPenalty = parseInt(modifierPart.slice(1));
+                    if (!isNaN(statPenalty) && statPenalty > 0) {
+                        mainStatModifier = -statPenalty;
+                    }
+                } else if (modifierPart.startsWith('*')) {
+                    const mult = parseFloat(modifierPart.slice(1));
+                    if (!isNaN(mult) && mult > 0) {
+                        rollMultiplier = mult;
+                    }
+                } else if (modifierPart.startsWith('/')) {
+                    const div = parseFloat(modifierPart.slice(1));
+                    if (!isNaN(div) && div > 0) {
+                        rollMultiplier = 1 / div;
+                    }
+                }
+            } else if (arg.startsWith('e')) {
                 const eff = parseInt(arg.slice(1));
                 if (!isNaN(eff) && eff >= 1 && eff <= 5) {
                     effort = eff;
