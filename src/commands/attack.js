@@ -27,7 +27,7 @@ module.exports = {
     description: 'Attack another character',
     async execute(message, args, database) {
         if (args.length < 1) {
-            return message.reply('Usage: `!attack <@target>` or `!attack <modifiers> <@target>`\n\n**Combat Modifiers:**\n• `e<1-5>` - Effort level\n• `a+<number>` - Agility bonus (ki cost)\n• `a*<number>` - Accuracy multiplier (ki cost)\n\n**No-Cost Modifiers:**\n• `m+/-<number>` - Main stat modifier (STR for physical, CON for ki)\n• `m*/<number>` - Final roll multiplier/divisor\n• `ma+/-<number>` - Agility modifier for accuracy only\n• `ma*/<number>` - Accuracy roll multiplier/divisor\n\n**Attack Types:**\n• `+<number>` - Physical additive\n• `*<number>` - Ki multiplier');
+            return message.reply('Usage: `!attack <@target>` or `!attack <modifiers> <@target>`\n\n**Combat Modifiers:**\n• `e<1-5>` - Effort level\n• `a+<number>` - Agility bonus (ki cost)\n• `a*<number>` - Accuracy multiplier (ki cost)\n\n**No-Cost Modifiers:**\n• `d+/-<number>` - Damage modifier (STR for physical, PL for ki, DEF for defense)\n• `d*/<number>` - Final roll multiplier/divisor\n• `c+/-<number>` - Control modifier\n• `c*/<number>` - Control roll multiplier/divisor\n• `ma+/-<number>` - Agility modifier for accuracy only\n• `ma*/<number>` - Accuracy roll multiplier/divisor\n\n**Attack Types:**\n• `+<number>` - Physical additive\n• `*<number>` - Ki multiplier');
         }
 
         // Parse arguments
@@ -37,8 +37,10 @@ module.exports = {
         let effort = 2; // Default normal effort
         
         // New no-cost modifiers
-        let mainStatModifier = 0; // m+/- modifier for main stat
-        let rollMultiplier = 1; // m*/ modifier for final roll
+        let damageModifier = 0; // d+/- modifier for damage stat (STR/PL/DEF)
+        let damageRollMultiplier = 1; // d*/ modifier for final roll
+        let controlModifier = 0; // c+/- modifier for control stat
+        let controlRollMultiplier = 1; // c*/ modifier for control roll
         let accuracyAgilityModifier = 0; // ma+/- modifier for agility in accuracy
         let accuracyRollMultiplier = 1; // ma*/ modifier for accuracy roll
 
@@ -80,33 +82,62 @@ module.exports = {
                         accuracyRollMultiplier = 1 / div;
                     }
                 }
-            } else if (arg.startsWith('m') && !arg.startsWith('<@') && !arg.startsWith('ma')) {
-                // m modifiers - main stat no-cost modifiers
-                const modifierPart = arg.slice(1); // Get everything after 'm'
+            } else if (arg.startsWith('d') && !arg.startsWith('<@')) {
+                // d modifiers - damage/defense no-cost modifiers
+                const modifierPart = arg.slice(1); // Get everything after 'd'
                 
                 if (modifierPart.startsWith('+')) {
-                    // m+10 = +10 to main stat
+                    // d+10 = +10 to damage stat (STR for physical, PL for ki, DEF for defense)
                     const statBonus = parseInt(modifierPart.slice(1));
                     if (!isNaN(statBonus) && statBonus > 0) {
-                        mainStatModifier = statBonus;
+                        damageModifier = statBonus;
                     }
                 } else if (modifierPart.startsWith('-')) {
-                    // m-5 = -5 to main stat
+                    // d-5 = -5 to damage stat
                     const statPenalty = parseInt(modifierPart.slice(1));
                     if (!isNaN(statPenalty) && statPenalty > 0) {
-                        mainStatModifier = -statPenalty;
+                        damageModifier = -statPenalty;
                     }
                 } else if (modifierPart.startsWith('*')) {
-                    // m*2 = 2x final roll multiplier
+                    // d*2 = 2x final damage roll multiplier
                     const mult = parseFloat(modifierPart.slice(1));
                     if (!isNaN(mult) && mult > 0) {
-                        rollMultiplier = mult;
+                        damageRollMultiplier = mult;
                     }
                 } else if (modifierPart.startsWith('/')) {
-                    // m/2 = divide final roll by 2
+                    // d/2 = divide final damage roll by 2
                     const div = parseFloat(modifierPart.slice(1));
                     if (!isNaN(div) && div > 0) {
-                        rollMultiplier = 1 / div;
+                        damageRollMultiplier = 1 / div;
+                    }
+                }
+            } else if (arg.startsWith('c') && !arg.startsWith('<@')) {
+                // c modifiers - control no-cost modifiers
+                const modifierPart = arg.slice(1); // Get everything after 'c'
+                
+                if (modifierPart.startsWith('+')) {
+                    // c+10 = +10 to control stat
+                    const controlBonus = parseInt(modifierPart.slice(1));
+                    if (!isNaN(controlBonus) && controlBonus > 0) {
+                        controlModifier = controlBonus;
+                    }
+                } else if (modifierPart.startsWith('-')) {
+                    // c-5 = -5 to control stat
+                    const controlPenalty = parseInt(modifierPart.slice(1));
+                    if (!isNaN(controlPenalty) && controlPenalty > 0) {
+                        controlModifier = -controlPenalty;
+                    }
+                } else if (modifierPart.startsWith('*')) {
+                    // c*2 = 2x control roll multiplier
+                    const mult = parseFloat(modifierPart.slice(1));
+                    if (!isNaN(mult) && mult > 0) {
+                        controlRollMultiplier = mult;
+                    }
+                } else if (modifierPart.startsWith('/')) {
+                    // c/2 = divide control roll by 2
+                    const div = parseFloat(modifierPart.slice(1));
+                    if (!isNaN(div) && div > 0) {
+                        controlRollMultiplier = 1 / div;
                     }
                 }
             } else if (arg.startsWith('a') && !arg.startsWith('<@')) {
@@ -258,16 +289,16 @@ module.exports = {
                 
                 // For now, we'll implement physical and ki attacks
                 if (attackType === 'magic') {
-                    await handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+                    await handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
                     return;
                 }
 
                 if (attackType === 'physical') {
-                    await handlePhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+                    await handlePhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
                 } else if (attackType === 'ki') {
-                    await handleKiAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+                    await handleKiAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
                 } else if (attackType === 'magic') {
-                    await handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+                    await handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
                 }
             });
 
@@ -291,7 +322,7 @@ module.exports = {
     }
 };
 
-async function handlePhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handlePhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Get effective stats including technique effects (like Clear Mind)
     const baseStats = {
         control: attackerData.control,
@@ -349,9 +380,9 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         }
 
         if (buttonInteraction.customId === 'physical_attack') {
-            await handleBasicPhysicalAttack(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, maxAdditive, effectiveStats, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+            await handleBasicPhysicalAttack(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, maxAdditive, effectiveStats, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
         } else if (buttonInteraction.customId === 'physical_technique') {
-            await handleTechniqueSelection(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+            await handleTechniqueSelection(buttonInteraction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
         }
     });
 
@@ -369,7 +400,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
     });
 }
 
-async function handleBasicPhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, maxAdditive, effectiveStats, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleBasicPhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, maxAdditive, effectiveStats, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
         .setTitle('💪 Physical Attack')
@@ -418,7 +449,7 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
     }
 
     // Calculate damage and accuracy with new modifiers
-    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, additive, database, attackerData.active_character_id);
     
     // Calculate accuracy with both old and new agility modifiers
@@ -426,7 +457,7 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
     
     // Apply effort, accuracy multiplier, and new roll modifiers
-    const damage = rollWithEffort(baseDamage, effort) * rollMultiplier;
+    const damage = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     // Apply ki costs and gains
@@ -600,7 +631,7 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
     }
 }
 
-async function handleTechniqueSelection(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleTechniqueSelection(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     const embed = new EmbedBuilder()
         .setColor(0x9b59b6)
         .setTitle('⚡ Common Techniques')
@@ -653,25 +684,25 @@ async function handleTechniqueSelection(interaction, attackerData, targetData, a
             await handleGuard(interaction, attackerData, targetData, database);
             break;
         case 'hblow':
-            await handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+            await handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'feint':
-            await handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+            await handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'wpoint':
-            await handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+            await handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'dstrike':
-            await handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+            await handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'counter':
-            await handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+            await handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'chold':
-            await handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+            await handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'grab':
-            await handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+            await handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         default:
             const errorEmbed = new EmbedBuilder()
@@ -682,7 +713,7 @@ async function handleTechniqueSelection(interaction, attackerData, targetData, a
     }
 }
 
-async function handleKiAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleKiAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Get effective stats including technique effects (like Clear Mind)
     const baseStats = {
         control: attackerData.control,
@@ -790,21 +821,22 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
-    // Calculate ki cost using new system with effective control (including main stat modifier)
-    const effectiveControlWithModifier = Math.max(1, effectiveStats.control + mainStatModifier);
+    // Calculate ki cost using new system with effective control (including control modifier)
+    const effectiveControlWithModifier = Math.max(1, effectiveStats.control + controlModifier);
     const kiCost = calculateKiSpecialCost(multiplier, effectiveControlWithModifier);
     const currentKi = attackerData.current_ki || attackerData.endurance;
 
     // Calculate damage and accuracy with new modifiers
-    // For ki attacks, the main stat modifier affects control instead of strength
-    const baseDamage = calculateKiAttack(attackerEffectivePL, multiplier);
+    // For ki attacks, damageModifier affects the effective PL for damage calculation
+    const effectivePLWithDamageModifier = attackerEffectivePL + damageModifier;
+    const baseDamage = calculateKiAttack(effectivePLWithDamageModifier, multiplier);
     
     // Calculate accuracy with both old and new agility modifiers
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
     
     // Apply effort, accuracy multiplier, and new roll modifiers
-    const damage = rollWithEffort(baseDamage, effort) * rollMultiplier;
+    const damage = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     // Calculate total ki cost with effort and accuracy multiplier
@@ -962,7 +994,7 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     }
 }
 
-async function handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     const embed = new EmbedBuilder()
         .setColor(0x9b59b6)
         .setTitle('✨ Magic Attack')
@@ -1012,7 +1044,7 @@ async function handleMagicAttack(interaction, attackerData, targetData, attacker
     }
 
     // Calculate ki cost based on affinity (using modified control)
-    const effectiveControlWithModifier = Math.max(1, attackerData.control + mainStatModifier);
+    const effectiveControlWithModifier = Math.max(1, attackerData.control + controlModifier);
     let kiCost = 0;
     if (affinity === 'p') {
         // Primary Loss Formula: Technique Cost * (100 / Control)
@@ -1124,15 +1156,15 @@ async function handleGuard(interaction, attackerData, targetData, database) {
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Heavy Blow - Normal attack + agility debuff if damage dealt (FREE) - with modifiers
-    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
     
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
     
-    const damage = rollWithEffort(baseDamage, effort) * rollMultiplier;
+    const damage = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
@@ -1182,15 +1214,15 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Feint - Attack with dodge penalty (FREE) - with modifiers
-    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
     
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
     
-    const damage = rollWithEffort(baseDamage, effort) * rollMultiplier;
+    const damage = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
@@ -1236,7 +1268,7 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
@@ -1254,13 +1286,13 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
     }
 
     // Weakpoint - Reduced strength roll, but 7% health damage if not fully defended - with modifiers
-    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier * 0.7, 0, database, attackerData.active_character_id); // -0.3x penalty for display
     
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
     
-    const displayDamage = rollWithEffort(baseDamage, effort) * rollMultiplier; // For display only
+    const displayDamage = rollWithEffort(baseDamage, effort) * damageRollMultiplier; // For display only
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
     
     // Calculate 7% max health damage
@@ -1328,7 +1360,7 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
@@ -1346,14 +1378,14 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
     }
 
     // Double Strike - Roll twice and add together - with modifiers
-    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
     
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
     
-    const damage1 = rollWithEffort(baseDamage, effort) * rollMultiplier;
-    const damage2 = rollWithEffort(baseDamage, effort) * rollMultiplier;
+    const damage1 = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
+    const damage2 = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
     const totalDamage = damage1 + damage2;
     
     // Roll accuracy separately for each strike
@@ -1425,7 +1457,7 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
@@ -1446,13 +1478,13 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
     // For now, we'll implement the basic counter attack
 
     // Counter - Reduced strength, unblockable/undodgeable - with modifiers
-    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier * 0.8, 0, database, attackerData.active_character_id); // -0.2x debuff
     
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
     
-    const damage = rollWithEffort(baseDamage, effort) * rollMultiplier;
+    const damage = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     // Calculate total ki cost including effort (use the same calculation as the check above)
@@ -1515,7 +1547,7 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
@@ -1533,13 +1565,13 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
     }
 
     // Chokehold - Normal attack + ki drain if damage dealt - with modifiers
-    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
     
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
     const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
     
-    const damage = rollWithEffort(baseDamage, effort) * rollMultiplier;
+    const damage = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     // Calculate total ki cost including effort (use the same calculation as the check above)
@@ -1605,7 +1637,7 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
@@ -1640,7 +1672,7 @@ async function handleGrab(interaction, attackerData, targetData, attackerEffecti
     );
 
     // Grab - Special technique that doesn't take your turn - with modifiers
-    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + damageModifier);
     await addTechniqueEffect(
         database, 
         attackerData.active_character_id, 

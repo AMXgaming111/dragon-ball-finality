@@ -26,8 +26,8 @@ module.exports = {
         let effort = 2; // Default normal effort
         
         // New no-cost modifiers
-        let mainStatModifier = 0; // m+/- modifier for main stat (defense)
-        let rollMultiplier = 1; // m*/ modifier for final roll
+        let damageModifier = 0; // d+/- modifier for defense stat
+        let damageRollMultiplier = 1; // d*/ modifier for final roll
         let accuracyAgilityModifier = 0; // ma+/- modifier for agility in accuracy
         let accuracyRollMultiplier = 1; // ma*/ modifier for accuracy roll
 
@@ -58,29 +58,29 @@ module.exports = {
                         accuracyRollMultiplier = 1 / div;
                     }
                 }
-            } else if (arg.startsWith('m') && !arg.startsWith('<@') && !arg.startsWith('ma')) {
-                // m modifiers - main stat no-cost modifiers (defense stat for defend)
-                const modifierPart = arg.slice(1); // Get everything after 'm'
+            } else if (arg.startsWith('d') && !arg.startsWith('<@')) {
+                // d modifiers - defense no-cost modifiers
+                const modifierPart = arg.slice(1); // Get everything after 'd'
                 
                 if (modifierPart.startsWith('+')) {
                     const statBonus = parseInt(modifierPart.slice(1));
                     if (!isNaN(statBonus) && statBonus > 0) {
-                        mainStatModifier = statBonus;
+                        damageModifier = statBonus;
                     }
                 } else if (modifierPart.startsWith('-')) {
                     const statPenalty = parseInt(modifierPart.slice(1));
                     if (!isNaN(statPenalty) && statPenalty > 0) {
-                        mainStatModifier = -statPenalty;
+                        damageModifier = -statPenalty;
                     }
                 } else if (modifierPart.startsWith('*')) {
                     const mult = parseFloat(modifierPart.slice(1));
                     if (!isNaN(mult) && mult > 0) {
-                        rollMultiplier = mult;
+                        damageRollMultiplier = mult;
                     }
                 } else if (modifierPart.startsWith('/')) {
                     const div = parseFloat(modifierPart.slice(1));
                     if (!isNaN(div) && div > 0) {
-                        rollMultiplier = 1 / div;
+                        damageRollMultiplier = 1 / div;
                     }
                 }
             } else if (arg.startsWith('e')) {
@@ -388,7 +388,7 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     );
 
     // Calculate block value with new modifiers
-    const effectiveDefenseWithModifier = Math.max(1, defenderData.defense + mainStatModifier);
+    const effectiveDefenseWithModifier = Math.max(1, defenderData.defense + damageModifier);
     let blockValue;
     if (isBasic) {
         blockValue = await calculatePhysicalDefense(updatedEffectivePL, effectiveDefenseWithModifier, 0, database, defenderData.active_character_id);
@@ -399,7 +399,7 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     }
 
     // Apply effort to block roll, then apply roll multiplier
-    const finalBlockValue = rollWithEffort(blockValue, effort) * rollMultiplier;
+    const finalBlockValue = rollWithEffort(blockValue, effort) * damageRollMultiplier;
 
     // Gain ki for basic blocks (after roll)
     let finalKiAfterAll = newKi;
@@ -664,10 +664,10 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     }
 
     // Apply effort to dodge roll, then apply accuracy roll multiplier, then roll multiplier
-    const finalDodgeValue = rollWithEffort(dodgeValue, effort) * accuracyRollMultiplier * rollMultiplier;
+    const finalDodgeValue = rollWithEffort(dodgeValue, effort) * accuracyRollMultiplier * damageRollMultiplier;
 
     // For dodge, we also need the defender's defense stat for potential failed dodge pity block (with modifier)
-    const effectiveDefenseWithModifier = Math.max(1, defenderData.defense + mainStatModifier);
+    const effectiveDefenseWithModifier = Math.max(1, defenderData.defense + damageModifier);
     const defenseValue = await calculatePhysicalDefense(updatedEffectivePL, effectiveDefenseWithModifier, 0, database, defenderData.active_character_id);
 
     // Gain ki for basic dodges (after roll)
