@@ -653,25 +653,25 @@ async function handleTechniqueSelection(interaction, attackerData, targetData, a
             await handleGuard(interaction, attackerData, targetData, database);
             break;
         case 'hblow':
-            await handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
+            await handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'feint':
-            await handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
+            await handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'wpoint':
-            await handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
+            await handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'dstrike':
-            await handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
+            await handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'counter':
-            await handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
+            await handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'chold':
-            await handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
+            await handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'grab':
-            await handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database);
+            await handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier, rollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         default:
             const errorEmbed = new EmbedBuilder()
@@ -1124,13 +1124,16 @@ async function handleGuard(interaction, attackerData, targetData, database) {
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
-    // Heavy Blow - Normal attack + agility debuff if damage dealt (FREE)
-    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
+async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+    // Heavy Blow - Normal attack + agility debuff if damage dealt (FREE) - with modifiers
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
     
-    const damage = rollWithEffort(baseDamage, effort);
-    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+    const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
+    
+    const damage = rollWithEffort(baseDamage, effort) * rollMultiplier;
+    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
@@ -1179,13 +1182,16 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
-    // Feint - Attack with dodge penalty (FREE)
-    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
+async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+    // Feint - Attack with dodge penalty (FREE) - with modifiers
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
     
-    const damage = rollWithEffort(baseDamage, effort);
-    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+    const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
+    
+    const damage = rollWithEffort(baseDamage, effort) * rollMultiplier;
+    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
@@ -1230,7 +1236,7 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
+async function handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
@@ -1247,12 +1253,15 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
-    // Weakpoint - Reduced strength roll, but 7% health damage if not fully defended
-    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength * 0.7, 0, database, attackerData.active_character_id); // -0.3x penalty for display
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
+    // Weakpoint - Reduced strength roll, but 7% health damage if not fully defended - with modifiers
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier * 0.7, 0, database, attackerData.active_character_id); // -0.3x penalty for display
     
-    const displayDamage = rollWithEffort(baseDamage, effort); // For display only
-    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+    const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
+    
+    const displayDamage = rollWithEffort(baseDamage, effort) * rollMultiplier; // For display only
+    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
     
     // Calculate 7% max health damage
     const targetMaxHealth = await calculateMaxHealthForCharacter(database, targetData.active_character_id, targetData.base_pl, targetData.endurance);
@@ -1319,7 +1328,7 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
+async function handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
@@ -1336,17 +1345,20 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
-    // Double Strike - Roll twice and add together
-    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
+    // Double Strike - Roll twice and add together - with modifiers
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
     
-    const damage1 = rollWithEffort(baseDamage, effort);
-    const damage2 = rollWithEffort(baseDamage, effort);
+    const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
+    
+    const damage1 = rollWithEffort(baseDamage, effort) * rollMultiplier;
+    const damage2 = rollWithEffort(baseDamage, effort) * rollMultiplier;
     const totalDamage = damage1 + damage2;
     
     // Roll accuracy separately for each strike
-    const accuracy1 = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
-    const accuracy2 = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+    const accuracy1 = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
+    const accuracy2 = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     // Calculate total ki cost including effort (use the same calculation as the check above)
     let totalKiCost = 4; // Base cost
@@ -1413,7 +1425,7 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
+async function handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
@@ -1433,12 +1445,15 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
     // TODO: Check if target attacked this character last turn and dealt no damage
     // For now, we'll implement the basic counter attack
 
-    // Counter - Reduced strength, unblockable/undodgeable
-    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength * 0.8, 0, database, attackerData.active_character_id); // -0.2x debuff
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
+    // Counter - Reduced strength, unblockable/undodgeable - with modifiers
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier * 0.8, 0, database, attackerData.active_character_id); // -0.2x debuff
     
-    const damage = rollWithEffort(baseDamage, effort);
-    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+    const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
+    
+    const damage = rollWithEffort(baseDamage, effort) * rollMultiplier;
+    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     // Calculate total ki cost including effort (use the same calculation as the check above)
     let totalKiCost = 4; // Base cost
@@ -1500,7 +1515,7 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
+async function handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
@@ -1517,12 +1532,15 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
-    // Chokehold - Normal attack + ki drain if damage dealt
-    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, attackerData.strength, 0, database, attackerData.active_character_id);
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + agilityModifier, 0, false);
+    // Chokehold - Normal attack + ki drain if damage dealt - with modifiers
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
+    const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
     
-    const damage = rollWithEffort(baseDamage, effort);
-    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort);
+    const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
+    
+    const damage = rollWithEffort(baseDamage, effort) * rollMultiplier;
+    const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     // Calculate total ki cost including effort (use the same calculation as the check above)
     let totalKiCost = 4; // Base cost
@@ -1587,7 +1605,7 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
+async function handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
     const currentKi = attackerData.current_ki || attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
@@ -1621,14 +1639,15 @@ async function handleGrab(interaction, attackerData, targetData, attackerEffecti
         [newKi, attackerData.active_character_id]
     );
 
-    // Grab - Special technique that doesn't take your turn
+    // Grab - Special technique that doesn't take your turn - with modifiers
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + mainStatModifier);
     await addTechniqueEffect(
         database, 
         attackerData.active_character_id, 
         interaction.channel.id, 
         'grab', 
         'grab_effect', 
-        attackerData.strength.toString(), 
+        effectiveStrengthWithModifier.toString(), 
         targetData.active_character_id, 
         1 // Until start of next turn
     );
