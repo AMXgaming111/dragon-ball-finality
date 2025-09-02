@@ -600,7 +600,7 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
     }
 }
 
-async function handleTechniqueSelection(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
+async function handleTechniqueSelection(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     const embed = new EmbedBuilder()
         .setColor(0x9b59b6)
         .setTitle('⚡ Common Techniques')
@@ -962,7 +962,7 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     }
 }
 
-async function handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database) {
+async function handleMagicAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, mainStatModifier = 0, rollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     const embed = new EmbedBuilder()
         .setColor(0x9b59b6)
         .setTitle('✨ Magic Attack')
@@ -1011,14 +1011,15 @@ async function handleMagicAttack(interaction, attackerData, targetData, attacker
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
-    // Calculate ki cost based on affinity
+    // Calculate ki cost based on affinity (using modified control)
+    const effectiveControlWithModifier = Math.max(1, attackerData.control + mainStatModifier);
     let kiCost = 0;
     if (affinity === 'p') {
         // Primary Loss Formula: Technique Cost * (100 / Control)
-        kiCost = baseCost * (100 / attackerData.control);
+        kiCost = baseCost * (100 / effectiveControlWithModifier);
     } else if (affinity === 's') {
         // Secondary Loss Formula: (Technique Cost * (100 / Control)) * 2
-        kiCost = (baseCost * (100 / attackerData.control)) * 2;
+        kiCost = (baseCost * (100 / effectiveControlWithModifier)) * 2;
     }
 
     kiCost = Math.floor(kiCost); // Round down to integer

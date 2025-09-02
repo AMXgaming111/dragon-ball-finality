@@ -387,18 +387,19 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
         combatBonuses.majinMagicBonus
     );
 
-    // Calculate block value
+    // Calculate block value with new modifiers
+    const effectiveDefenseWithModifier = Math.max(1, defenderData.defense + mainStatModifier);
     let blockValue;
     if (isBasic) {
-        blockValue = await calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, 0, database, defenderData.active_character_id);
+        blockValue = await calculatePhysicalDefense(updatedEffectivePL, effectiveDefenseWithModifier, 0, database, defenderData.active_character_id);
     } else if (isMultiplier) {
-        blockValue = await calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, 0, database, defenderData.active_character_id) * modifier;
+        blockValue = await calculatePhysicalDefense(updatedEffectivePL, effectiveDefenseWithModifier, 0, database, defenderData.active_character_id) * modifier;
     } else {
-        blockValue = await calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, modifier, database, defenderData.active_character_id);
+        blockValue = await calculatePhysicalDefense(updatedEffectivePL, effectiveDefenseWithModifier, modifier, database, defenderData.active_character_id);
     }
 
-    // Apply effort to block roll
-    const finalBlockValue = rollWithEffort(blockValue, effort);
+    // Apply effort to block roll, then apply roll multiplier
+    const finalBlockValue = rollWithEffort(blockValue, effort) * rollMultiplier;
 
     // Gain ki for basic blocks (after roll)
     let finalKiAfterAll = newKi;
@@ -645,14 +646,15 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         combatBonuses.majinMagicBonus
     );
 
-    // Calculate dodge value
+    // Calculate dodge value with accuracy agility modifier
+    const effectiveAgilityWithModifier = Math.max(1, defenderData.agility + accuracyAgilityModifier);
     let dodgeValue;
     if (isBasic) {
-        dodgeValue = calculateAccuracy(updatedEffectivePL, defenderData.agility, 0, false);
+        dodgeValue = calculateAccuracy(updatedEffectivePL, effectiveAgilityWithModifier, 0, false);
     } else if (isMultiplier) {
-        dodgeValue = calculateAccuracy(updatedEffectivePL, defenderData.agility, 0, false) * modifier;
+        dodgeValue = calculateAccuracy(updatedEffectivePL, effectiveAgilityWithModifier, 0, false) * modifier;
     } else {
-        dodgeValue = calculateAccuracy(updatedEffectivePL, defenderData.agility, modifier, false);
+        dodgeValue = calculateAccuracy(updatedEffectivePL, effectiveAgilityWithModifier, modifier, false);
     }
 
     // Apply feint penalty if the attack is a feint
@@ -661,11 +663,12 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
         dodgeValue = Math.floor(dodgeValue * feintPenalty);
     }
 
-    // Apply effort to dodge roll
-    const finalDodgeValue = rollWithEffort(dodgeValue, effort);
+    // Apply effort to dodge roll, then apply accuracy roll multiplier, then roll multiplier
+    const finalDodgeValue = rollWithEffort(dodgeValue, effort) * accuracyRollMultiplier * rollMultiplier;
 
-    // For dodge, we also need the defender's defense stat for potential failed dodge pity block
-    const defenseValue = await calculatePhysicalDefense(updatedEffectivePL, defenderData.defense, 0, database, defenderData.active_character_id);
+    // For dodge, we also need the defender's defense stat for potential failed dodge pity block (with modifier)
+    const effectiveDefenseWithModifier = Math.max(1, defenderData.defense + mainStatModifier);
+    const defenseValue = await calculatePhysicalDefense(updatedEffectivePL, effectiveDefenseWithModifier, 0, database, defenderData.active_character_id);
 
     // Gain ki for basic dodges (after roll)
     let finalKiAfterAll = newKi;
