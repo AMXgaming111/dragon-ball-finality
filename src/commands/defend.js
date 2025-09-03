@@ -140,7 +140,7 @@ module.exports = {
             }
 
             // Calculate defender's effective PL
-            const defenderKiPercentage = defenderData.current_ki ? (defenderData.current_ki / defenderData.endurance) * 100 : 100;
+            const defenderKiPercentage = defenderData.current_ki !== null ? (defenderData.current_ki / defenderData.endurance) * 100 : 100;
             // Check for Arcosian Resilience racial
             const hasArcosianResilience = await database.get(`
                 SELECT is_active FROM character_racials 
@@ -254,7 +254,7 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     const maxAdditive = ((effectiveStrength + defenderData.endurance + defenderData.control) / 6).toFixed(2);
     
     // Calculate maximum affordable multiplier
-    const defenderCurrentKi = defenderData.current_ki || defenderData.endurance;
+    const defenderCurrentKi = defenderData.current_ki !== null ? defenderData.current_ki : defenderData.endurance;
     const maxMultiplier = calculateMaxAffordableMultiplier(defenderCurrentKi, defenderData.control, effort, 1, defenderData.endurance);
     
     const embed = new EmbedBuilder()

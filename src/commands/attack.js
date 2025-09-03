@@ -489,7 +489,7 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
         }
         
         // Check if attacker has enough ki for the costs
-        const currentKi = attackerData.current_ki || attackerData.endurance;
+        const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
         const totalKiCost = Math.abs(Math.min(0, kiChange)); // Get the total cost (negative changes)
         if (totalKiCost > currentKi) {
             const errorEmbed = new EmbedBuilder()
@@ -501,9 +501,9 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
     }
 
     // Update attacker's ki
-    let finalKi = attackerData.current_ki || attackerData.endurance;
+    let finalKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     if (kiChange !== 0) {
-        const currentKi = attackerData.current_ki || attackerData.endurance;
+        const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
         let newKi = Math.max(0, currentKi + kiChange);
         
         // For basic attacks, respect health cap

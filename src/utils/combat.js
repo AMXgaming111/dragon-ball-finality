@@ -504,7 +504,7 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
             // Store the last attacked target's effective PL for Zenkai checking
             const targetData = await database.getUserWithActiveCharacter(pendingAttack.target_user_id);
             if (targetData) {
-                const targetKiPercentage = targetData.current_ki ? (targetData.current_ki / targetData.endurance) * 100 : 100;
+                const targetKiPercentage = targetData.current_ki !== null ? (targetData.current_ki / targetData.endurance) * 100 : 100;
                 
                 // Check for target's Arcosian Resilience
                 const targetHasArcosianResilience = await database.get(`
