@@ -36,7 +36,7 @@ module.exports = {
 
             // Calculate current values for display
             const maxKi = calculateMaxKi(userData.endurance);
-            const currentKi = userData.current_ki || maxKi;
+            const currentKi = userData.current_ki !== null ? userData.current_ki : maxKi;
             const kiPercentage = calculateHealthPercentage(currentKi, maxKi);
 
             // Check for Arcosian Resilience

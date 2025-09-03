@@ -73,7 +73,7 @@ module.exports = {
                 userData.endurance
             );
             const currentHealth = userData.current_health || maxHealth;
-            const currentKi = userData.current_ki || userData.endurance;
+            const currentKi = userData.current_ki !== null ? userData.current_ki : userData.endurance;
             const maxHealingAvailable = getMaxHealingForKi(currentKi);
 
             const embed = new EmbedBuilder()

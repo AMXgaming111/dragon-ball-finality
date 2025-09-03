@@ -724,7 +724,7 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     const effectiveStats = await calculateEffectiveStats(database, attackerData.active_character_id, interaction.channel.id, baseStats);
     
     // Calculate maximum affordable multiplier with effective control
-    const attackerCurrentKi = attackerData.current_ki || attackerData.endurance;
+    const attackerCurrentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const maxMultiplier = calculateMaxAffordableMultiplier(attackerCurrentKi, effectiveStats.control, effort, accuracyMultiplier, attackerData.endurance);
     
     // Check if any multipliers are affordable
@@ -824,7 +824,7 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     // Calculate ki cost using new system with effective control (including control modifier)
     const effectiveControlWithModifier = Math.max(1, effectiveStats.control + controlModifier);
     const kiCost = calculateKiSpecialCost(multiplier, effectiveControlWithModifier);
-    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
 
     // Calculate damage and accuracy with new modifiers
     // For ki attacks, damageModifier affects the effective PL for damage calculation
@@ -1057,7 +1057,7 @@ async function handleMagicAttack(interaction, attackerData, targetData, attacker
     kiCost = Math.floor(kiCost); // Round down to integer
 
     // Check if attacker has enough ki
-    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     if (kiCost > currentKi) {
         const errorEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)
@@ -1114,7 +1114,7 @@ async function handleClearMind(interaction, attackerData, targetData, database) 
     );
 
     // Get updated ki information for display
-    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const maxKi = attackerData.endurance;
     const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
     const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
@@ -1142,7 +1142,7 @@ async function handleGuard(interaction, attackerData, targetData, database) {
     );
 
     // Get ki information for display
-    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const maxKi = attackerData.endurance;
     const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
     const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
@@ -1170,7 +1170,7 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
     // Get ki information for display
-    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const maxKi = attackerData.endurance;
     const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
     const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
@@ -1228,7 +1228,7 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
     // Get ki information for display
-    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const maxKi = attackerData.endurance;
     const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
     const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
@@ -1270,7 +1270,7 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
 
 async function handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
-    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
     let totalRequiredKi = 4; // Base cost
     if (effortKiCost > 0) {
@@ -1362,7 +1362,7 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
 
 async function handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
-    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
     let totalRequiredKi = 4; // Base cost
     if (effortKiCost > 0) {
@@ -1459,7 +1459,7 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
 
 async function handleCounter(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
-    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
     let totalRequiredKi = 4; // Base cost
     if (effortKiCost > 0) {
@@ -1549,7 +1549,7 @@ async function handleCounter(interaction, attackerData, targetData, attackerEffe
 
 async function handleChokehold(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
-    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
     let totalRequiredKi = 4; // Base cost
     if (effortKiCost > 0) {
@@ -1639,7 +1639,7 @@ async function handleChokehold(interaction, attackerData, targetData, attackerEf
 
 async function handleGrab(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check ki cost (4 ki base + effort, unaffected by control)
-    const currentKi = attackerData.current_ki || attackerData.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
     let totalRequiredKi = 4; // Base cost
     if (effortKiCost > 0) {

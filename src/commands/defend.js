@@ -348,7 +348,7 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     }
 
     // Check if defender has enough ki for the costs
-    const currentKi = defenderData.current_ki || defenderData.endurance;
+    const currentKi = defenderData.current_ki !== null ? defenderData.current_ki : defenderData.endurance;
     const totalKiCost = Math.abs(Math.min(0, kiChange)); // Get the total cost (negative changes)
     if (totalKiCost > currentKi) {
         const errorEmbed = new EmbedBuilder()
@@ -513,7 +513,7 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     const maxAdditive = ((effectiveStrength + defenderData.endurance + defenderData.control) / 6).toFixed(2);
     
     // Calculate maximum affordable multiplier
-    const defenderCurrentKi = defenderData.current_ki || defenderData.endurance;
+    const defenderCurrentKi = defenderData.current_ki !== null ? defenderData.current_ki : defenderData.endurance;
     const maxMultiplier = calculateMaxAffordableMultiplier(defenderCurrentKi, defenderData.control, effort, 1, defenderData.endurance);
     
     const embed = new EmbedBuilder()
@@ -607,7 +607,7 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     }
 
     // Check if defender has enough ki for the costs
-    const currentKi = defenderData.current_ki || defenderData.endurance;
+    const currentKi = defenderData.current_ki !== null ? defenderData.current_ki : defenderData.endurance;
     const totalKiCost = Math.abs(Math.min(0, kiChange)); // Get the total cost (negative changes)
     if (totalKiCost > currentKi) {
         const errorEmbed = new EmbedBuilder()
@@ -898,7 +898,7 @@ async function handleMagicDefense(interaction, defenderData, attackerData, defen
     kiCost = Math.floor(kiCost); // Round down to integer
 
     // Check if defender has enough ki
-    const currentKi = defenderData.current_ki || defenderData.endurance;
+    const currentKi = defenderData.current_ki !== null ? defenderData.current_ki : defenderData.endurance;
     if (kiCost > currentKi) {
         const errorEmbed = new EmbedBuilder()
             .setColor(0xe74c3c)

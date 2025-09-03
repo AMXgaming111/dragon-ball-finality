@@ -128,7 +128,7 @@ function createCharacterSummary(character) {
     const maxHealth = Math.floor((character.endurance * 10) + (character.base_pl * 0.1));
     const maxKi = Math.floor((character.control * 10) + (character.base_pl * 0.05));
     const currentHealth = character.current_health || maxHealth;
-    const currentKi = character.current_ki || maxKi;
+    const currentKi = character.current_ki !== null ? character.current_ki : maxKi;
     
     return {
         name: character.name,

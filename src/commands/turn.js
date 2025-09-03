@@ -494,7 +494,7 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
 
             if (combatState && combatState.last_enemy_pl) {
                 // Calculate character's current effective PL
-                const currentKi = character.current_ki || character.endurance;
+                const currentKi = character.current_ki !== null ? character.current_ki : character.endurance;
                 const kiPercentage = (currentKi / character.endurance) * 100;
                 
                 // Check for form multiplier
@@ -626,7 +626,7 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
     }
 
     if (kiChange !== 0) {
-        const currentKi = character.current_ki || character.endurance;
+        const currentKi = character.current_ki !== null ? character.current_ki : character.endurance;
         const newKi = Math.max(0, currentKi + kiChange);
         
         await database.run(

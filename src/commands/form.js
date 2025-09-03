@@ -92,7 +92,7 @@ module.exports = {
                 }
 
                 // Check if character has enough resources
-                const currentKi = userData.current_ki || userData.endurance;
+                const currentKi = userData.current_ki !== null ? userData.current_ki : userData.endurance;
                 const maxHealth = await calculateMaxHealthForCharacter(database, userData.active_character_id, userData.base_pl, userData.endurance);
                 const currentHealth = userData.current_health || maxHealth;
 

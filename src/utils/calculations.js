@@ -577,7 +577,7 @@ async function handleMajinMagic(db, characterId, healthPercentageLost, channelId
         }
 
         // Calculate ki gain (equal to health percentage lost by defender)
-        const currentKi = character.current_ki || 0;
+        const currentKi = character.current_ki !== null ? character.current_ki : 0;
         const maxKi = character.endurance || 100;
         const kiGainAmount = Math.max(1, Math.floor(maxKi * (healthPercentageLost / 100)));
         
