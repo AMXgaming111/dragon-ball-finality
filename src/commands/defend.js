@@ -213,9 +213,9 @@ module.exports = {
                 }
 
                 if (defenseType === 'block') {
-                    await handleBlock(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack);
+                    await handleBlock(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack, damageModifier, damageRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
                 } else if (defenseType === 'dodge') {
-                    await handleDodge(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack);
+                    await handleDodge(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack, damageModifier, damageRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
                 }
             });
 
@@ -239,7 +239,7 @@ module.exports = {
     }
 };
 
-async function handleBlock(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack) {
+async function handleBlock(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack, damageModifier = 0, damageRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check for Namekian Giant Form bonus for max additive calculation
     let effectiveStrength = defenderData.strength;
     const giantForm = await database.get(`
@@ -498,7 +498,7 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     }
 }
 
-async function handleDodge(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack) {
+async function handleDodge(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack, damageModifier = 0, damageRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Check for Namekian Giant Form bonus for max additive calculation
     let effectiveStrength = defenderData.strength;
     const giantForm = await database.get(`
