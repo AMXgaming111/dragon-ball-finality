@@ -1167,18 +1167,40 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
     const damage = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
+    // Apply effort ki costs
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
+    const effortKiCost = getEffortKiCost(effort);
+    let totalKiCost = 0; // Heavy Blow is free, but effort still costs
+    
+    if (effortKiCost > 0) {
+        totalKiCost += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
+    } else if (effortKiCost < 0) {
+        // Effort 1 gives ki even on free techniques
+        totalKiCost -= Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
+    }
+    
+    // Apply ki change
+    const newKi = currentKi - totalKiCost;
+    if (totalKiCost !== 0) {
+        const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
+        const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
+        await database.run(
+            `UPDATE characters SET current_ki = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
+            [newKi, attackerData.active_character_id]
+        );
+    }
+
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
-    // Get ki information for display
-    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
+    // Get ki information for display (use updated ki)
     const maxKi = attackerData.endurance;
-    const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
+    const kiPercentage = Math.max(0, (newKi / maxKi) * 100);
     const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
 
     const embed = new EmbedBuilder()
         .setColor(0xe74c3c)
         .setTitle('💥 Heavy Blow')
-        .setDescription(`**${attackerData.name}** throws a heavy blow at **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If damage is dealt, target gets -20% agility until start of your next turn.\n\n${kiBar}\n${currentKi}/${maxKi} Ki`)
+        .setDescription(`**${attackerData.name}** throws a heavy blow at **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If damage is dealt, target gets -20% agility until start of your next turn.\n\n${kiBar}\n${newKi}/${maxKi} Ki`)
         .addFields(
             { name: 'Attack Damage', value: damage.toString(), inline: true },
             { name: 'Accuracy', value: accuracy.toString(), inline: true },
@@ -1225,18 +1247,40 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
     const damage = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
+    // Apply effort ki costs
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
+    const effortKiCost = getEffortKiCost(effort);
+    let totalKiCost = 0; // Feint is free, but effort still costs
+    
+    if (effortKiCost > 0) {
+        totalKiCost += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
+    } else if (effortKiCost < 0) {
+        // Effort 1 gives ki even on free techniques
+        totalKiCost -= Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
+    }
+    
+    // Apply ki change
+    const newKi = currentKi - totalKiCost;
+    if (totalKiCost !== 0) {
+        const paramPlaceholder1 = database.usePostgres ? '$1' : '?';
+        const paramPlaceholder2 = database.usePostgres ? '$2' : '?';
+        await database.run(
+            `UPDATE characters SET current_ki = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
+            [newKi, attackerData.active_character_id]
+        );
+    }
+
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
-    // Get ki information for display
-    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
+    // Get ki information for display (use updated ki)
     const maxKi = attackerData.endurance;
-    const kiPercentage = Math.max(0, (currentKi / maxKi) * 100);
+    const kiPercentage = Math.max(0, (newKi / maxKi) * 100);
     const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
 
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
         .setTitle('🎭 Feint')
-        .setDescription(`**${attackerData.name}** attempts a tricky feint against **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If target attempts to dodge, their agility roll gets -0.5x penalty.\n\n${kiBar}\n${currentKi}/${maxKi} Ki`)
+        .setDescription(`**${attackerData.name}** attempts a tricky feint against **${targetData.name}**!\n\n*${targetData.name} must use \`!defend @${attackerUser.username}\` to respond!*\n\n**Effect:** If target attempts to dodge, their agility roll gets -0.5x penalty.\n\n${kiBar}\n${newKi}/${maxKi} Ki`)
         .addFields(
             { name: 'Attack Damage', value: damage.toString(), inline: true },
             { name: 'Accuracy', value: accuracy.toString(), inline: true },
