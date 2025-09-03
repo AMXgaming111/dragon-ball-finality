@@ -15,7 +15,7 @@ const {
     generateHealthBar,
     calculateMaxHealthForCharacter
 } = require('../utils/calculations');
-const { getPendingAttack, resolveCombat, createCombatResultEmbed, cleanupExpiredAttacks, addKiDisplay } = require('../utils/combat');
+const { getPendingAttack, getLatestAttackFromUser, resolveCombat, createCombatResultEmbed, cleanupExpiredAttacks, addKiDisplay } = require('../utils/combat');
 const { autoManageTurnOrder, advanceTurnFromInteraction, applyEndOfTurnEffects } = require('../../helper_functions');
 
 module.exports = {
@@ -121,7 +121,7 @@ module.exports = {
             }
 
             // Check for pending attack
-            const pendingAttack = await getPendingAttack(database, message.channel.id, attackerUserId, message.author.id);
+            const pendingAttack = await getLatestAttackFromUser(database, message.channel.id, attackerUserId);
             if (!pendingAttack) {
                 return message.reply(`No pending attack found from ${attackerUser.username}. They need to attack you first!`);
             }
@@ -416,7 +416,7 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     }
 
     // Resolve combat
-    const combatResult = await resolveCombat(database, pendingAttack, 'block', finalBlockValue);
+    const combatResult = await resolveCombat(database, pendingAttack, 'block', finalBlockValue, null, false);
     
     // Handle different combat result types
     let defenseEmbed;
@@ -685,7 +685,7 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     }
 
     // Resolve combat with dodge
-    const combatResult = await resolveCombat(database, pendingAttack, 'dodge', defenseValue, finalDodgeValue);
+    const combatResult = await resolveCombat(database, pendingAttack, 'dodge', defenseValue, finalDodgeValue, false);
     
     // Create detailed defense result embed instead of basic combat embed
     const defenseEmbed = new EmbedBuilder()
@@ -914,11 +914,7 @@ async function handleMagicDefense(interaction, defenderData, attackerData, defen
         [newKi, defenderData.active_character_id]
     );
 
-    // Clean up the pending attack since magic defense doesn't block/dodge traditionally
-    await database.run(`
-        DELETE FROM pending_attacks 
-        WHERE channel_id = ? AND attacker_user_id = ? AND defender_user_id = ?
-    `, [pendingAttack.channel_id, pendingAttack.attacker_user_id, pendingAttack.defender_user_id]);
+    // Note: Not deleting the pending attack to allow multiple defenses
 
     // Create final result embed
     const resultEmbed = new EmbedBuilder()

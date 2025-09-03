@@ -321,6 +321,35 @@ async function getPendingAttack(database, channelId, attackerUserId, targetUserI
 }
 
 /**
+ * Get the most recent pending attack from a specific attacker in a channel
+ * Used for defend command when targeting a specific attacker
+ */
+async function getLatestAttackFromUser(database, channelId, attackerUserId) {
+    await cleanupExpiredAttacks(database);
+    
+    const attack = await database.get(`
+        SELECT * FROM pending_attacks 
+        WHERE channel_id = ? AND attacker_user_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+    `, [channelId, attackerUserId]);
+    
+    if (!attack) {
+        return null;
+    }
+    
+    // Parse the attack data
+    try {
+        attack.attack_data = JSON.parse(attack.attack_data);
+    } catch (error) {
+        console.error('Error parsing attack data:', error);
+        attack.attack_data = {};
+    }
+    
+    return attack;
+}
+
+/**
  * Clean up expired pending attacks
  */
 async function cleanupExpiredAttacks(database) {
@@ -328,9 +357,16 @@ async function cleanupExpiredAttacks(database) {
 }
 
 /**
+ * Manually delete a specific pending attack by ID
+ */
+async function deletePendingAttack(database, attackId) {
+    await database.run('DELETE FROM pending_attacks WHERE id = ?', [attackId]);
+}
+
+/**
  * Resolve combat between attack and defense
  */
-async function resolveCombat(database, pendingAttack, defenseType, defenseValue, dodgeValue = null) {
+async function resolveCombat(database, pendingAttack, defenseType, defenseValue, dodgeValue = null, deleteAttack = true) {
     const attackData = pendingAttack.attack_data;
     let finalDamage = 0;
     let combatResult = {};
@@ -549,8 +585,10 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
         }
     }
     
-    // Remove the pending attack
-    await database.run('DELETE FROM pending_attacks WHERE id = ?', [pendingAttack.id]);
+    // Remove the pending attack only if requested
+    if (deleteAttack) {
+        await database.run('DELETE FROM pending_attacks WHERE id = ?', [pendingAttack.id]);
+    }
     
     return combatResult;
 }
@@ -682,7 +720,9 @@ function addKiDisplay(embed, characterName, currentKi, maxKi) {
 module.exports = {
     storePendingAttack,
     getPendingAttack,
+    getLatestAttackFromUser,
     cleanupExpiredAttacks,
+    deletePendingAttack,
     resolveCombat,
     createCombatResultEmbed,
     addKiDisplay
