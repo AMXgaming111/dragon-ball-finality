@@ -85,6 +85,7 @@ class Database {
                 agility INTEGER DEFAULT 1,
                 endurance INTEGER DEFAULT 1,
                 control INTEGER DEFAULT 1,
+                ap INTEGER DEFAULT 0,
                 current_health INTEGER DEFAULT NULL,
                 current_ki INTEGER DEFAULT NULL,
                 release_percentage REAL DEFAULT 100.0,
@@ -193,6 +194,7 @@ class Database {
                 agility INTEGER DEFAULT 1,
                 endurance INTEGER DEFAULT 1,
                 control INTEGER DEFAULT 1,
+                ap INTEGER DEFAULT 0,
                 current_health INTEGER DEFAULT NULL,
                 current_ki INTEGER DEFAULT NULL,
                 release_percentage REAL DEFAULT 100.0,
@@ -329,6 +331,29 @@ class Database {
             }
         } catch (error) {
             console.log('Release percentage migration error:', error.message);
+        }
+
+        // Migration: Add ap column if it doesn't exist
+        try {
+            // Check if ap column exists
+            const columns = this.usePostgres 
+                ? await this.all(`SELECT column_name FROM information_schema.columns WHERE table_name = 'characters' AND column_name = 'ap'`)
+                : await this.all(`PRAGMA table_info(characters)`);
+            
+            const hasAP = this.usePostgres 
+                ? columns.length > 0
+                : columns.some(col => col.name === 'ap');
+            
+            if (!hasAP) {
+                await this.run(`ALTER TABLE characters ADD COLUMN ap INTEGER DEFAULT 0`);
+                console.log('Added ap column to characters table');
+                
+                // Set default values for existing characters
+                await this.run(`UPDATE characters SET ap = 0 WHERE ap IS NULL`);
+                console.log('Set default ap values for existing characters');
+            }
+        } catch (error) {
+            console.log('AP migration error:', error.message);
         }
 
         // Migration: Add racial_tag column if it doesn't exist and migrate data

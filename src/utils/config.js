@@ -8,6 +8,52 @@ module.exports = {
     // Available races
     races: ['Saiyan', 'Namekian', 'Synthetic Majin', 'Majin', 'Human', 'Arcosian'],
     
+    // Racial stat caps for AP system
+    racialCaps: {
+        'Human': {
+            strength: 40,
+            defense: 40,
+            agility: 40,
+            endurance: 60,
+            control: 450
+        },
+        'Saiyan': {
+            strength: 80,
+            defense: 80,
+            agility: 80,
+            endurance: 120,
+            control: 100
+        },
+        'Arcosian': {
+            strength: 120,
+            defense: 120,
+            agility: 120,
+            endurance: 160,
+            control: 60
+        },
+        'Namekian': {
+            strength: 60,
+            defense: 60,
+            agility: 60,
+            endurance: 100,
+            control: 150
+        },
+        'Majin': {
+            strength: 70,
+            defense: 70,
+            agility: 70,
+            endurance: 90,
+            control: 200
+        },
+        'Synthetic Majin': {
+            strength: 80,
+            defense: 90,
+            agility: 80,
+            endurance: 50,
+            control: 150
+        }
+    },
+    
     // Racial abilities
     racials: {
         zenkai: {

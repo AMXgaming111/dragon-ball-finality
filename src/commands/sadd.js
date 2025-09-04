@@ -13,7 +13,7 @@ module.exports = {
         }
 
         if (args.length < 4) {
-            return message.reply('Usage: `!sadd <@user> <stat> <+/-/*/set> <value>`\nStats: str, def, agi, end, cont\nExamples: `!sadd @user str + 10`, `!sadd @user def set 20`');
+            return message.reply('Usage: `!sadd <@user> <stat> <+/-/*/set> <value>`\nStats: str, def, agi, end, cont, ap\nExamples: `!sadd @user str + 10`, `!sadd @user def set 20`, `!sadd @user ap + 5`');
         }
 
         // Parse arguments
@@ -32,11 +32,12 @@ module.exports = {
             'def': 'defense',
             'agi': 'agility',
             'end': 'endurance',
-            'cont': 'control'
+            'cont': 'control',
+            'ap': 'ap'
         };
 
         if (!statMap[statAbbr]) {
-            return message.reply('Invalid stat! Use: str, def, agi, end, cont');
+            return message.reply('Invalid stat! Use: str, def, agi, end, cont, ap');
         }
 
         const statName = statMap[statAbbr];
