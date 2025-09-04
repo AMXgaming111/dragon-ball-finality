@@ -1,6 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { staffRoleName, racials, magicAffinityDisplayNames } = require('../utils/config');
-const { hasStaffRole, calculateStatCaps } = require('../utils/calculations');
+const { hasStaffRole } = require('../utils/calculations');
 
 module.exports = {
     name: 'stats',
@@ -39,19 +39,17 @@ module.exports = {
 
             // Generate main stats embed
             const generateStatsEmbed = () => {
-                const caps = calculateStatCaps(userData);
-                
                 const embed = new EmbedBuilder()
                     .setColor(0x3498db)
                     .setTitle(`${userData.name}'s Stats`)
                     .setThumbnail(userData.image_url || require('../utils/config').defaultCharacterImage)
                     .addFields(
                         { name: 'Base PL', value: userData.base_pl.toString(), inline: false },
-                        { name: 'Strength', value: `${userData.strength}/${caps.strength}`, inline: true },
-                        { name: 'Defense', value: `${userData.defense}/${caps.defense}`, inline: true },
-                        { name: 'Agility', value: `${userData.agility}/${caps.agility}`, inline: true },
-                        { name: 'Endurance', value: `${userData.endurance}/${caps.endurance}`, inline: true },
-                        { name: 'Control', value: `${userData.control}/${caps.control}`, inline: true },
+                        { name: 'Strength', value: userData.strength.toString(), inline: true },
+                        { name: 'Defense', value: userData.defense.toString(), inline: true },
+                        { name: 'Agility', value: userData.agility.toString(), inline: true },
+                        { name: 'Endurance', value: userData.endurance.toString(), inline: true },
+                        { name: 'Control', value: userData.control.toString(), inline: true },
                         { name: 'AP', value: userData.ap.toString(), inline: true },
                         { name: 'Race', value: userData.race, inline: true }
                     );
