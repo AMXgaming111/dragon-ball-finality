@@ -4,7 +4,8 @@ const {
     calculateEffectivePLWithRelease,
     calculateMaxAffordableMultiplier,
     calculatePhysicalAttack, 
-    calculateKiAttack, 
+    calculateKiAttack,
+    calculateProgressionModifier,
     calculateAccuracy,
     rollWithEffort,
     getEffortKiCost,
@@ -829,7 +830,7 @@ async function handleKiAttack(interaction, attackerData, targetData, attackerEff
     // Calculate damage and accuracy with new modifiers
     // For ki attacks, damageModifier affects the effective PL for damage calculation
     const effectivePLWithDamageModifier = attackerEffectivePL + damageModifier;
-    const baseDamage = calculateKiAttack(effectivePLWithDamageModifier, multiplier);
+    const baseDamage = calculateKiAttack(effectivePLWithDamageModifier, attackerData.base_pl, multiplier);
     
     // Calculate accuracy with both old and new agility modifiers
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;

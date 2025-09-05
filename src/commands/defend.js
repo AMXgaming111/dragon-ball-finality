@@ -4,7 +4,8 @@ const {
     calculateEffectivePLWithRelease,
     calculateMaxAffordableMultiplier,
     calculatePhysicalDefense, 
-    calculateKiDefense, 
+    calculateKiDefense,
+    calculateProgressionModifier,
     calculateAccuracy,
     rollWithEffort,
     getEffortKiCost,
@@ -393,7 +394,8 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     if (isBasic) {
         blockValue = await calculatePhysicalDefense(updatedEffectivePL, effectiveDefenseWithModifier, 0, database, defenderData.active_character_id);
     } else if (isMultiplier) {
-        blockValue = await calculatePhysicalDefense(updatedEffectivePL, effectiveDefenseWithModifier, 0, database, defenderData.active_character_id) * modifier;
+        // Use ki defense calculation for multipliers (progression modifier system)
+        blockValue = calculateKiDefense(updatedEffectivePL, defenderData.base_pl, modifier);
     } else {
         blockValue = await calculatePhysicalDefense(updatedEffectivePL, effectiveDefenseWithModifier, modifier, database, defenderData.active_character_id);
     }
@@ -647,11 +649,13 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
     );
 
     // Calculate dodge value with accuracy agility modifier
+    // Note: Agility uses the traditional multiplier system, not progression modifier
     const effectiveAgilityWithModifier = Math.max(1, defenderData.agility + accuracyAgilityModifier);
     let dodgeValue;
     if (isBasic) {
         dodgeValue = calculateAccuracy(updatedEffectivePL, effectiveAgilityWithModifier, 0, false);
     } else if (isMultiplier) {
+        // Agility multipliers use traditional system (multiply the agility roll)
         dodgeValue = calculateAccuracy(updatedEffectivePL, effectiveAgilityWithModifier, 0, false) * modifier;
     } else {
         dodgeValue = calculateAccuracy(updatedEffectivePL, effectiveAgilityWithModifier, modifier, false);

@@ -317,9 +317,15 @@ async function calculatePhysicalAttack(effectivePL, strength, additive = 0, data
     return Math.max(1, Math.floor(effectivePL * (finalStrength / 10))); // Ensure minimum damage of 1
 }
 
-// Calculate ki attack damage
-function calculateKiAttack(effectivePL, multiplier = 1) {
-    return Math.max(1, Math.floor(effectivePL * 10 * multiplier)); // Ensure minimum damage of 1
+// Calculate progression modifier based on base PL
+function calculateProgressionModifier(basePL) {
+    return Math.min(10, Math.floor(basePL / 10));
+}
+
+// Calculate ki attack damage with progression modifier
+function calculateKiAttack(effectivePL, basePL, multiplier = 1) {
+    const progressionModifier = calculateProgressionModifier(basePL);
+    return Math.max(1, Math.floor(effectivePL * (progressionModifier * multiplier))); // Ensure minimum damage of 1
 }
 
 // Calculate accuracy/agility roll
@@ -486,10 +492,10 @@ async function calculatePhysicalDefense(effectivePL, defense, additive = 0, data
     return Math.max(1, Math.floor(effectivePL * (finalDefense / 10))); // Ensure minimum defense of 1
 }
 
-// Calculate ki defense (blocking with ki enhancement)
-function calculateKiDefense(effectivePL, defense, multiplier = 1) {
-    const baseDefense = Math.floor(effectivePL * (defense / 10));
-    return Math.max(1, Math.floor(baseDefense * multiplier)); // Ensure minimum defense of 1
+// Calculate ki defense (blocking with ki enhancement using progression modifier)
+function calculateKiDefense(effectivePL, basePL, multiplier = 1) {
+    const progressionModifier = calculateProgressionModifier(basePL);
+    return Math.max(1, Math.floor(effectivePL * (progressionModifier * multiplier))); // Ensure minimum defense of 1
 }
 
 // Generate health bar visualization
@@ -662,6 +668,7 @@ async function getCombatBonuses(db, characterId, channelId = null) {
 }
 
 module.exports = {
+    calculateProgressionModifier,
     calculateKiLossFromHealth,
     calculateEffectivePL,
     calculateEffectivePLWithRelease,
