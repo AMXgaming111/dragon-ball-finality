@@ -50,7 +50,6 @@ module.exports = {
                         { name: 'Agility', value: userData.agility.toString(), inline: true },
                         { name: 'Endurance', value: userData.endurance.toString(), inline: true },
                         { name: 'Control', value: userData.control.toString(), inline: true },
-                        { name: 'AP', value: userData.ap.toString(), inline: true },
                         { name: 'Race', value: userData.race, inline: true }
                     );
 

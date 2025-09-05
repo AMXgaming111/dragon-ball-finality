@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { calculateEffectivePL, calculateEffectivePLWithRelease, calculateHealthPercentage, calculateMaxHealth, calculateMaxHealthForCharacter, calculateMaxKi, getCombatBonuses, calculateKiLossFromHealth } = require('../utils/calculations');
+const { calculateEffectivePL, calculateEffectivePLWithRelease, calculateHealthPercentage, calculateMaxHealth, calculateMaxHealthForCharacter, calculateMaxKi, getCombatBonuses } = require('../utils/calculations');
 
 module.exports = {
     name: 'pl',
@@ -141,13 +141,10 @@ module.exports = {
 
             // Add ki debuff explanation if applicable
             if (kiPercentage < 100) {
-                // Calculate the pure ki debuff percentage (not affected by release)
-                const rawKiDebuff = calculateKiLossFromHealth(kiPercentage);
-                const adjustedKiDebuff = !!hasArcosianResilience ? rawKiDebuff / 2 : rawKiDebuff;
-                
+                const kiDebuffPercentage = ((userData.base_pl * formMultiplier - effectivePL) / (userData.base_pl * formMultiplier) * 100);
                 embed.addFields({ 
                     name: 'Ki Debuff', 
-                    value: `${Math.round(adjustedKiDebuff)}% PL reduction from ki loss`, 
+                    value: `${Math.round(kiDebuffPercentage)}% PL reduction from ki loss`, 
                     inline: false 
                 });
             }
