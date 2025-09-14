@@ -8,6 +8,7 @@
     "dev": "node index.js",
     "test": "node test-setup.js",
     "setup": "node test-setup.js",
+    "migrate": "node add_suppression_form_migration.js",
     "deploy": "pm2 start ecosystem.config.json",
     "stop": "pm2 stop dragonball-finality-bot",
     "restart": "pm2 restart dragonball-finality-bot",
