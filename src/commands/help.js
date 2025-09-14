@@ -36,7 +36,7 @@ module.exports = {
                         },
                         'stats': {
                             usage: '!stats [@user]',
-                            description: 'Display character stats with interactive buttons for skills/forms',
+                            description: 'Display character stats with interactive buttons for skills/states',
                             examples: ['!stats', '!stats @user'],
                             aliases: []
                         },
@@ -106,19 +106,19 @@ module.exports = {
                         }
                     }
                 },
-                'Forms & Abilities': {
+                'Ascended States & Abilities': {
                     emoji: '🔥',
                     commands: {
-                        'form': {
-                            usage: '!form <form_name>',
-                            description: 'Activate or deactivate character forms',
-                            examples: ['!form "Super Saiyan"', '!form base'],
+                        'state': {
+                            usage: '!state <state_key> <transform/revert>',
+                            description: 'Transform into or revert from ascended states',
+                            examples: ['!state ssj transform', '!state ssj revert'],
                             aliases: []
                         },
-                        'currentform': {
-                            usage: '!currentform',
-                            description: 'Check your currently active form and its modifiers',
-                            examples: ['!currentform'],
+                        'currentstate': {
+                            usage: '!currentstate',
+                            description: 'Check your currently active ascended state and its modifiers',
+                            examples: ['!currentstate'],
                             aliases: []
                         },
                         'race': {
@@ -197,16 +197,10 @@ module.exports = {
                             examples: ['!saffinity @user fire 1', '!saffinity @user water 2'],
                             aliases: []
                         },
-                        'sform': {
-                            usage: '!sform @user <form_name>',
-                            description: 'Activate forms for other characters (Staff only)',
-                            examples: ['!sform @user "Super Saiyan"'],
-                            aliases: []
-                        },
-                        'formset': {
-                            usage: '!formset @user <add/remove> <form_name>',
-                            description: 'Grant or remove form access (Staff only)',
-                            examples: ['!formset @user add "Super Saiyan"'],
+                        'stateset': {
+                            usage: '!stateset <give/remove> <@user> <state_key>',
+                            description: 'Grant or remove ascended state access (Staff only)',
+                            examples: ['!stateset give @AMX ssj', '!stateset remove @Justine sspirit'],
                             aliases: []
                         },
                         'rc': {

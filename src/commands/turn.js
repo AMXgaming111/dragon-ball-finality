@@ -596,12 +596,30 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
 
     // Apply form drains/gains
     if (character.form_name) {
-        // Form is active, apply drains
+        // Form is active, apply drains/gains
         if (character.ki_drain) {
             const baseDrain = parseInt(character.ki_drain) || 0;
-            if (baseDrain > 0) {
+            
+            // Special handling for Suppression Form (minimal)
+            if (character.form_key === 'minimal' && baseDrain < 0) {
+                // Suppression Form: regain 5% ki per turn, minimum 1 ki if under 20 endurance
+                const regenPercentage = Math.abs(baseDrain); // Convert -5 to 5
+                let kiRegen = Math.floor(character.endurance * (regenPercentage / 100));
+                
+                // Apply minimum 1 ki if under 20 endurance
+                if (character.endurance < 20 && kiRegen < 1) {
+                    kiRegen = 1;
+                }
+                
+                kiChange += kiRegen;
+            } else if (baseDrain > 0) {
+                // Regular form ki drain
                 const actualDrain = Math.max(1, baseDrain * (100 / character.control));
                 kiChange -= actualDrain;
+            } else if (baseDrain < 0) {
+                // Regular form ki gain (negative drain)
+                const actualGain = Math.abs(baseDrain);
+                kiChange += actualGain;
             }
         }
         

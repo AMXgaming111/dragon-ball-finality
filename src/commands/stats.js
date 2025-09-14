@@ -112,9 +112,9 @@ module.exports = {
                 return embed;
             };
 
-            // Generate forms embed
-            const generateFormsEmbed = async () => {
-                const characterForms = await database.all(`
+            // Generate states embed
+            const generateStatesEmbed = async () => {
+                const characterStates = await database.all(`
                     SELECT f.* FROM character_forms cf 
                     JOIN forms f ON cf.form_key = f.form_key 
                     WHERE cf.character_id = ?
@@ -122,23 +122,23 @@ module.exports = {
 
                 const embed = new EmbedBuilder()
                     .setColor(0xf39c12)
-                    .setTitle(`${userData.name}'s Forms`)
+                    .setTitle(`${userData.name}'s States`)
                     .setTimestamp();
 
-                if (characterForms.length === 0) {
-                    embed.setDescription('No forms available.');
+                if (characterStates.length === 0) {
+                    embed.setDescription('No ascended states available.');
                 } else {
                     let description = '';
-                    characterForms.forEach(form => {
-                        description += `**${form.name}**\n`;
+                    characterStates.forEach(state => {
+                        description += `**${state.name}**\n`;
                         
                         const modifiers = [];
-                        if (form.strength_modifier) modifiers.push(`STR: ${form.strength_modifier}`);
-                        if (form.defense_modifier) modifiers.push(`DEF: ${form.defense_modifier}`);
-                        if (form.agility_modifier) modifiers.push(`AGI: ${form.agility_modifier}`);
-                        if (form.endurance_modifier) modifiers.push(`END: ${form.endurance_modifier}`);
-                        if (form.control_modifier) modifiers.push(`CON: ${form.control_modifier}`);
-                        if (form.pl_modifier) modifiers.push(`PL: ${form.pl_modifier}`);
+                        if (state.strength_modifier) modifiers.push(`STR: ${state.strength_modifier}`);
+                        if (state.defense_modifier) modifiers.push(`DEF: ${state.defense_modifier}`);
+                        if (state.agility_modifier) modifiers.push(`AGI: ${state.agility_modifier}`);
+                        if (state.endurance_modifier) modifiers.push(`END: ${state.endurance_modifier}`);
+                        if (state.control_modifier) modifiers.push(`CON: ${state.control_modifier}`);
+                        if (state.pl_modifier) modifiers.push(`PL: ${state.pl_modifier}`);
                         
                         if (modifiers.length > 0) {
                             description += `└ ${modifiers.join(', ')}\n`;
@@ -165,9 +165,9 @@ module.exports = {
                         .setLabel('Skills')
                         .setStyle(currentView === 'skills' ? ButtonStyle.Primary : ButtonStyle.Secondary),
                     new ButtonBuilder()
-                        .setCustomId('view_forms')
-                        .setLabel('Forms')
-                        .setStyle(currentView === 'forms' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+                        .setCustomId('view_states')
+                        .setLabel('States')
+                        .setStyle(currentView === 'states' ? ButtonStyle.Primary : ButtonStyle.Secondary)
                 );
 
                 return row;
@@ -204,9 +204,9 @@ module.exports = {
                         embed = generateSkillsEmbed();
                         currentView = 'skills';
                         break;
-                    case 'view_forms':
-                        embed = await generateFormsEmbed();
-                        currentView = 'forms';
+                    case 'view_states':
+                        embed = await generateStatesEmbed();
+                        currentView = 'states';
                         break;
                 }
 

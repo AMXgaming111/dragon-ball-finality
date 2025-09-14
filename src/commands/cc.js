@@ -72,6 +72,15 @@ module.exports = {
                 );
             }
 
+            // Grant innate states for specific races
+            if (validRace === 'Arcosian') {
+                // Grant Suppression Form (minimal) to all Arcosians as an innate state
+                await database.run(
+                    `INSERT INTO character_forms (character_id, form_key, is_active) VALUES (?, ?, ?)`,
+                    [characterId, 'minimal', false]
+                );
+            }
+
             // Set as active character if user doesn't have one
             const user = await database.getUser(message.author.id);
             if (!user.active_character_id) {
