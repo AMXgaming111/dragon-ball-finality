@@ -167,7 +167,7 @@ module.exports = {
                 } else {
                     let description = '';
                     characterStates.forEach(state => {
-                        description += `**${state.name}**\n`;
+                        description += `**${state.name}** (\`${state.form_key}\`)\n`;
                         
                         const modifiers = [];
                         if (state.strength_modifier) modifiers.push(`STR: ${state.strength_modifier}`);
