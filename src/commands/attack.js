@@ -286,16 +286,6 @@ module.exports = {
                     inline: false
                 });
             }
-                embed.addFields({
-                    name: 'Current State',
-                    value: `**${attackerForm.name}**`,
-                    inline: false
-                });
-            }
-
-            if (accuracyMultiplier !== 1) {
-                embed.addFields({ name: 'Accuracy Modifier', value: `×${accuracyMultiplier}`, inline: true });
-            }
 
             const physicalButton = new ButtonBuilder()
                 .setCustomId('attack_physical')
