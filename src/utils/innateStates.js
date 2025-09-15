@@ -23,6 +23,14 @@ const INNATE_STATES = {
             special_features: ['turn_ki_cost', 'strength_defense_boost']
         }
     ],
+    'Saiyan': [
+        {
+            form_key: 'oozaru',
+            name: 'Oozaru',
+            description: 'x10 Strength, x0.2 Control. Additionally, you are unable to use ki supers for anything aside from attacking.',
+            special_features: ['ki_super_restriction']
+        }
+    ],
     // Add more races and their innate states here
     // 'Saiyan': [
     //     {
@@ -59,6 +67,10 @@ const SPECIAL_FEATURES = {
     'strength_defense_boost': {
         description: 'Provides multiplier bonus to strength and defense',
         handler: 'handleStrengthDefenseBoost'
+    },
+    'ki_super_restriction': {
+        description: 'Restricts ki supers to attacking only',
+        handler: 'handleKiSuperRestriction'
     },
     'moon_trigger': {
         description: 'Automatically activates under certain conditions',
