@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const { races, defaultCharacterImage } = require('../utils/config');
 const { getRacialForRace } = require('../utils/calculations');
+const { grantInnateStates, getInnateStatesForRace } = require('../utils/innateStates');
 
 module.exports = {
     name: 'cc',
@@ -72,14 +73,8 @@ module.exports = {
                 );
             }
 
-            // Grant innate states for specific races
-            if (validRace === 'Arcosian') {
-                // Grant Suppression Form (minimal) to all Arcosians as an innate state
-                await database.run(
-                    `INSERT INTO character_forms (character_id, form_key, is_active) VALUES (?, ?, ?)`,
-                    [characterId, 'minimal', false]
-                );
-            }
+            // Grant innate states for the race (replaces the old Arcosian-specific code)
+            await grantInnateStates(database, characterId, validRace);
 
             // Set as active character if user doesn't have one
             const user = await database.getUser(message.author.id);
@@ -91,6 +86,11 @@ module.exports = {
             }
 
             // Create success embed
+            const innateStates = getInnateStatesForRace(validRace);
+            const innateStatesList = innateStates.length > 0 
+                ? innateStates.map(state => state.name).join(', ')
+                : 'None';
+
             const embed = new EmbedBuilder()
                 .setColor(0x00ff00)
                 .setTitle('Character Created!')
@@ -98,7 +98,8 @@ module.exports = {
                 .addFields(
                     { name: 'Race', value: validRace, inline: true },
                     { name: 'Base PL', value: '1', inline: true },
-                    { name: 'Racial Ability', value: racialTag ? racialTag : 'None', inline: true }
+                    { name: 'Racial Ability', value: racialTag ? racialTag : 'None', inline: true },
+                    { name: 'Innate States', value: innateStatesList, inline: false }
                 )
                 .setThumbnail(defaultCharacterImage)
                 .setFooter({ text: `Character ID: ${characterId}` })
