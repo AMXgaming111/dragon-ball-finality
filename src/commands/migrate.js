@@ -16,7 +16,8 @@ module.exports = {
                 .setTitle('📋 Available Migrations')
                 .setDescription('Use `!migrate <migration_name>` to run a specific migration')
                 .addFields(
-                    { name: 'suppression', value: 'Add Suppression Form to existing Arcosian characters', inline: false }
+                    { name: 'suppression', value: 'Add Suppression Form to existing Arcosian characters', inline: false },
+                    { name: 'giantform', value: 'Add Giant Form to existing Namekian characters', inline: false }
                 )
                 .setFooter({ text: 'Migrations are safe to run multiple times' })
                 .setTimestamp();
@@ -141,6 +142,135 @@ module.exports = {
                         { name: 'Already Had Form', value: skippedCount.toString(), inline: true }
                     )
                     .setFooter({ text: 'Arcosians can now use !state minimal transform/revert' })
+                    .setTimestamp();
+
+                await response.edit({ embeds: [successEmbed] });
+
+            } catch (error) {
+                console.error('Migration error:', error);
+                const errorEmbed = new EmbedBuilder()
+                    .setColor(0xff0000)
+                    .setTitle('❌ Migration Failed')
+                    .setDescription(`Error: ${error.message}`)
+                    .setTimestamp();
+
+                await message.reply({ embeds: [errorEmbed] });
+            }
+        } else if (migrationName === 'giantform') {
+            try {
+                const embed = new EmbedBuilder()
+                    .setColor(0xffa500)
+                    .setTitle('🔄 Running Giant Form Migration')
+                    .setDescription('Adding Giant Form to existing Namekian characters...')
+                    .setTimestamp();
+
+                const response = await message.reply({ embeds: [embed] });
+
+                // Check database type once
+                const isPostgres = database.usePostgres || process.env.DATABASE_URL;
+
+                // Check if Giant Form already exists
+                const existingForm = await database.get(
+                    isPostgres ? 
+                        'SELECT * FROM forms WHERE form_key = $1' : 
+                        'SELECT * FROM forms WHERE form_key = ?', 
+                    ['ngiant']
+                );
+
+                if (!existingForm) {
+                    console.log('✨ Creating Giant Form...');
+                    
+                    if (isPostgres) {
+                        // PostgreSQL version with ON CONFLICT
+                        await database.run(`
+                            INSERT INTO forms (
+                                form_key, 
+                                name, 
+                                strength_modifier,
+                                defense_modifier,
+                                ki_drain,
+                                is_stackable
+                            ) VALUES ($1, $2, $3, $4, $5, $6)
+                            ON CONFLICT (form_key) DO NOTHING
+                        `, [
+                            'ngiant',
+                            'Giant Form',
+                            '*1.4',           // x1.4 strength
+                            '*1.4',           // x1.4 defense
+                            '3',              // 3 ki per turn cost (affected by control)
+                            false             // Not stackable
+                        ]);
+                    } else {
+                        // SQLite version with OR IGNORE
+                        await database.run(`
+                            INSERT OR IGNORE INTO forms (
+                                form_key, 
+                                name, 
+                                strength_modifier,
+                                defense_modifier,
+                                ki_drain,
+                                is_stackable
+                            ) VALUES (?, ?, ?, ?, ?, ?)
+                        `, [
+                            'ngiant',
+                            'Giant Form',
+                            '*1.4',           // x1.4 strength
+                            '*1.4',           // x1.4 defense
+                            '3',              // 3 ki per turn cost (affected by control)
+                            false             // Not stackable
+                        ]);
+                    }
+                }
+
+                // Find existing Namekian characters
+                const namekianCharacters = await database.all(
+                    isPostgres ? 
+                        'SELECT id, name, owner_id FROM characters WHERE race = $1' :
+                        'SELECT id, name, owner_id FROM characters WHERE race = ?',
+                    ['Namekian']
+                );
+
+                let grantedCount = 0;
+                let skippedCount = 0;
+
+                for (const character of namekianCharacters) {
+                    const hasForm = await database.get(
+                        isPostgres ?
+                            'SELECT * FROM character_forms WHERE character_id = $1 AND form_key = $2' :
+                            'SELECT * FROM character_forms WHERE character_id = ? AND form_key = ?',
+                        [character.id, 'ngiant']
+                    );
+
+                    if (!hasForm) {
+                        if (isPostgres) {
+                            await database.run(`
+                                INSERT INTO character_forms (character_id, form_key, is_active)
+                                VALUES ($1, $2, $3)
+                                ON CONFLICT (character_id, form_key) DO NOTHING
+                            `, [character.id, 'ngiant', false]);
+                        } else {
+                            await database.run(`
+                                INSERT OR IGNORE INTO character_forms (character_id, form_key, is_active)
+                                VALUES (?, ?, ?)
+                            `, [character.id, 'ngiant', false]);
+                        }
+
+                        grantedCount++;
+                    } else {
+                        skippedCount++;
+                    }
+                }
+
+                const successEmbed = new EmbedBuilder()
+                    .setColor(0x00ff00)
+                    .setTitle('✅ Migration Complete!')
+                    .setDescription('Successfully added Giant Form to Namekian characters')
+                    .addFields(
+                        { name: 'Total Namekians', value: namekianCharacters.length.toString(), inline: true },
+                        { name: 'Forms Granted', value: grantedCount.toString(), inline: true },
+                        { name: 'Already Had Form', value: skippedCount.toString(), inline: true }
+                    )
+                    .setFooter({ text: 'Namekians can now use !state ngiant to transform/revert' })
                     .setTimestamp();
 
                 await response.edit({ embeds: [successEmbed] });

@@ -134,9 +134,9 @@ module.exports = {
                             aliases: []
                         },
                         'ngiant': {
-                            usage: '!ngiant <on/off>',
-                            description: 'Toggle Namekian Giant Form',
-                            examples: ['!ngiant on', '!ngiant off'],
+                            usage: '!ngiant (DEPRECATED - Use !state ngiant)',
+                            description: '[DEPRECATED] Use !state ngiant instead - Redirects to new States system',
+                            examples: ['Use !state ngiant instead'],
                             aliases: []
                         },
                         'nregen': {

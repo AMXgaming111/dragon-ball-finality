@@ -15,6 +15,14 @@ const INNATE_STATES = {
             special_features: ['ki_regeneration', 'endurance_based_ki_gain']
         }
     ],
+    'Namekian': [
+        {
+            form_key: 'ngiant',
+            name: 'Giant Form',
+            description: 'x1.4 Strength and Defense. Cost: 3 Ki per turn (affected by control). Advanced Ki Control allows harnessing this power without size change.',
+            special_features: ['turn_ki_cost', 'strength_defense_boost']
+        }
+    ],
     // Add more races and their innate states here
     // 'Saiyan': [
     //     {
@@ -43,6 +51,14 @@ const SPECIAL_FEATURES = {
     'endurance_based_ki_gain': {
         description: 'Ki regeneration amount depends on endurance stat',
         handler: 'handleEnduranceBasedKiGain'
+    },
+    'turn_ki_cost': {
+        description: 'Costs ki at the start of each turn',
+        handler: 'handleTurnKiCost'
+    },
+    'strength_defense_boost': {
+        description: 'Provides multiplier bonus to strength and defense',
+        handler: 'handleStrengthDefenseBoost'
     },
     'moon_trigger': {
         description: 'Automatically activates under certain conditions',
@@ -127,25 +143,65 @@ async function grantInnateStates(database, characterId, race) {
             if (!existingForm) {
                 console.log(`⚠️  Warning: Form '${state.form_key}' not found for race '${race}'. Creating it...`);
                 
-                // Create the form if it doesn't exist
-                // Note: This assumes default values - you may want to customize these
-                await database.run(`
-                    INSERT OR IGNORE INTO forms (
-                        form_key, 
-                        name, 
-                        pl_modifier, 
-                        control_modifier, 
-                        ki_drain,
-                        is_stackable
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                `, [
-                    state.form_key,
-                    state.name,
-                    '*1',     // No PL change by default
-                    '*1',     // No control change by default
-                    '0',      // No ki drain by default
-                    false
-                ]);
+                // Create the form based on the state configuration
+                if (state.form_key === 'minimal') {
+                    // Arcosian Suppression Form
+                    await database.run(`
+                        INSERT OR IGNORE INTO forms (
+                            form_key, 
+                            name, 
+                            pl_modifier, 
+                            control_modifier, 
+                            ki_drain,
+                            is_stackable
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                    `, [
+                        state.form_key,
+                        state.name,
+                        '*0.6',     // 40% PL reduction
+                        '*2',       // x2 control
+                        '-5',       // Regain 5% ki per turn
+                        false
+                    ]);
+                } else if (state.form_key === 'ngiant') {
+                    // Namekian Giant Form
+                    await database.run(`
+                        INSERT OR IGNORE INTO forms (
+                            form_key, 
+                            name, 
+                            strength_modifier,
+                            defense_modifier,
+                            ki_drain,
+                            is_stackable
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                    `, [
+                        state.form_key,
+                        state.name,
+                        '*1.4',     // x1.4 strength
+                        '*1.4',     // x1.4 defense
+                        '3',        // 3 ki per turn cost
+                        false
+                    ]);
+                } else {
+                    // Default form creation for other states
+                    await database.run(`
+                        INSERT OR IGNORE INTO forms (
+                            form_key, 
+                            name, 
+                            pl_modifier, 
+                            control_modifier, 
+                            ki_drain,
+                            is_stackable
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                    `, [
+                        state.form_key,
+                        state.name,
+                        '*1',     // No PL change by default
+                        '*1',     // No control change by default
+                        '0',      // No ki drain by default
+                        false
+                    ]);
+                }
             }
 
             // Grant the state to the character
