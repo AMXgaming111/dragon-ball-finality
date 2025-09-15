@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const { getTransformedStats } = require('../utils/calculations');
 
 module.exports = {
     name: 'r',
@@ -55,6 +56,7 @@ module.exports = {
 
             let rollResults = [];
             let rollDescription = '';
+            let activeForm = null; // Track if there's an active form affecting the roll
 
             if (statMap[target]) {
                 // Rolling a character stat
@@ -63,12 +65,41 @@ module.exports = {
                     return message.reply('You don\'t have an active character.');
                 }
 
+                // Get base stats
+                const baseStats = {
+                    strength: userData.strength,
+                    defense: userData.defense,
+                    agility: userData.agility,
+                    endurance: userData.endurance,
+                    control: userData.control
+                };
+
+                // Get transformed stats (includes form/state bonuses)
+                const { stats: transformedStats, form: activeStateForm } = await getTransformedStats(
+                    database, 
+                    userData.active_character_id, 
+                    baseStats
+                );
+
                 const statName = statMap[target];
-                const statValue = userData[statName];
-                rollDescription = `${statName.charAt(0).toUpperCase() + statName.slice(1)} (${statValue})`;
+                const baseStatValue = baseStats[statName];
+                const transformedStatValue = transformedStats[statName];
+
+                // Store active form info for embed
+                activeForm = activeStateForm;
+
+                // Use transformed stat value for rolling
+                const rollStatValue = transformedStatValue;
+
+                // Create description showing transformation if applicable
+                if (baseStatValue === transformedStatValue) {
+                    rollDescription = `${statName.charAt(0).toUpperCase() + statName.slice(1)} (${rollStatValue})`;
+                } else {
+                    rollDescription = `${statName.charAt(0).toUpperCase() + statName.slice(1)} (${baseStatValue} → ${rollStatValue})`;
+                }
 
                 for (let i = 0; i < diceCount; i++) {
-                    let roll = Math.floor(Math.random() * statValue) + 1;
+                    let roll = Math.floor(Math.random() * rollStatValue) + 1;
                     
                     if (isMultiplier) {
                         roll = Math.max(1, Math.floor(roll * modifier)); // Ensure minimum roll of 1
@@ -115,6 +146,11 @@ module.exports = {
             if (modifier !== 0) {
                 const modifierText = isMultiplier ? `×${modifier}` : (modifier > 0 ? `+${modifier}` : modifier.toString());
                 embed.addFields({ name: 'Modifier', value: modifierText, inline: true });
+            }
+
+            // Add active form info if present
+            if (activeForm) {
+                embed.addFields({ name: 'Active State', value: `**${activeForm.name}**`, inline: true });
             }
 
             // Display results
