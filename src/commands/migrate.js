@@ -140,7 +140,7 @@ module.exports = {
                         { name: 'Forms Granted', value: grantedCount.toString(), inline: true },
                         { name: 'Already Had Form', value: skippedCount.toString(), inline: true }
                     )
-                    .setFooter({ text: 'Arcosians can now use !state minimal enter/exit' })
+                    .setFooter({ text: 'Arcosians can now use !state minimal transform/revert' })
                     .setTimestamp();
 
                 await response.edit({ embeds: [successEmbed] });
