@@ -461,6 +461,21 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
 }
 
 async function handleBasicPhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, maxAdditive, effectiveStats, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+    // Get transformed stats for the attacker
+    const attackerBaseStats = {
+        strength: attackerData.strength,
+        defense: attackerData.defense,
+        agility: attackerData.agility,
+        endurance: attackerData.endurance,
+        control: attackerData.control
+    };
+
+    const { stats: attackerTransformedStats } = await getTransformedStats(
+        database,
+        attackerData.active_character_id,
+        attackerBaseStats
+    );
+
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
         .setTitle('💪 Physical Attack')
@@ -1217,6 +1232,21 @@ async function handleGuard(interaction, attackerData, targetData, database) {
 }
 
 async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+    // Get transformed stats for the attacker
+    const attackerBaseStats = {
+        strength: attackerData.strength,
+        defense: attackerData.defense,
+        agility: attackerData.agility,
+        endurance: attackerData.endurance,
+        control: attackerData.control
+    };
+
+    const { stats: attackerTransformedStats } = await getTransformedStats(
+        database,
+        attackerData.active_character_id,
+        attackerBaseStats
+    );
+
     // Heavy Blow - Normal attack + agility debuff if damage dealt (FREE) - with modifiers
     const effectiveStrengthWithModifier = Math.max(1, attackerTransformedStats.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
@@ -1297,6 +1327,21 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
 }
 
 async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+    // Get transformed stats for the attacker
+    const attackerBaseStats = {
+        strength: attackerData.strength,
+        defense: attackerData.defense,
+        agility: attackerData.agility,
+        endurance: attackerData.endurance,
+        control: attackerData.control
+    };
+
+    const { stats: attackerTransformedStats } = await getTransformedStats(
+        database,
+        attackerData.active_character_id,
+        attackerBaseStats
+    );
+
     // Feint - Attack with dodge penalty (FREE) - with modifiers
     const effectiveStrengthWithModifier = Math.max(1, attackerTransformedStats.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
