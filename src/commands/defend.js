@@ -117,6 +117,21 @@ module.exports = {
                 return message.reply('You don\'t have an active character.');
             }
 
+            // Get transformed stats for defender (used throughout combat calculations)
+            const defenderBaseStats = {
+                strength: defenderData.strength,
+                defense: defenderData.defense,
+                agility: defenderData.agility,
+                endurance: defenderData.endurance,
+                control: defenderData.control
+            };
+
+            const { stats: defenderTransformedStats } = await getTransformedStats(
+                database,
+                defenderData.active_character_id,
+                defenderBaseStats
+            );
+
             // Get attacker's character (for display purposes)
             const attackerData = await database.getUserWithActiveCharacter(attackerUserId);
             if (!attackerData || !attackerData.active_character_id) {
@@ -433,7 +448,7 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
     );
 
     // Calculate block value with new modifiers
-    const effectiveDefenseWithModifier = Math.max(1, defenderData.defense + damageModifier);
+    const effectiveDefenseWithModifier = Math.max(1, defenderTransformedStats.defense + damageModifier);
     let blockValue;
     if (isBasic) {
         blockValue = await calculatePhysicalDefense(updatedEffectivePL, effectiveDefenseWithModifier, 0, database, defenderData.active_character_id);
