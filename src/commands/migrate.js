@@ -36,36 +36,67 @@ module.exports = {
 
                 const response = await message.reply({ embeds: [embed] });
 
+                // Check database type once
+                const isPostgres = database.usePostgres || process.env.DATABASE_URL;
+
                 // Check if Suppression Form already exists
                 const existingForm = await database.get(
-                    'SELECT * FROM forms WHERE form_key = ?', 
+                    isPostgres ? 
+                        'SELECT * FROM forms WHERE form_key = $1' : 
+                        'SELECT * FROM forms WHERE form_key = ?', 
                     ['minimal']
                 );
 
                 if (!existingForm) {
                     console.log('✨ Creating Suppression Form...');
-                    await database.run(`
-                        INSERT OR IGNORE INTO forms (
-                            form_key, 
-                            name, 
-                            pl_modifier, 
-                            control_modifier, 
-                            ki_drain,
-                            is_stackable
-                        ) VALUES (?, ?, ?, ?, ?, ?)
-                    `, [
-                        'minimal',
-                        'Suppression Form',
-                        '*0.6',           // 40% PL reduction = 60% of original
-                        '*2',             // x2 control
-                        '-5',             // Regain 5% ki per turn (negative drain = gain)
-                        false             // Not stackable
-                    ]);
+                    
+                    if (isPostgres) {
+                        // PostgreSQL version with ON CONFLICT
+                        await database.run(`
+                            INSERT INTO forms (
+                                form_key, 
+                                name, 
+                                pl_modifier, 
+                                control_modifier, 
+                                ki_drain,
+                                is_stackable
+                            ) VALUES ($1, $2, $3, $4, $5, $6)
+                            ON CONFLICT (form_key) DO NOTHING
+                        `, [
+                            'minimal',
+                            'Suppression Form',
+                            '*0.6',           // 40% PL reduction = 60% of original
+                            '*2',             // x2 control
+                            '-5',             // Regain 5% ki per turn (negative drain = gain)
+                            false             // Not stackable
+                        ]);
+                    } else {
+                        // SQLite version with OR IGNORE
+                        await database.run(`
+                            INSERT OR IGNORE INTO forms (
+                                form_key, 
+                                name, 
+                                pl_modifier, 
+                                control_modifier, 
+                                ki_drain,
+                                is_stackable
+                            ) VALUES (?, ?, ?, ?, ?, ?)
+                        `, [
+                            'minimal',
+                            'Suppression Form',
+                            '*0.6',           // 40% PL reduction = 60% of original
+                            '*2',             // x2 control
+                            '-5',             // Regain 5% ki per turn (negative drain = gain)
+                            false             // Not stackable
+                        ]);
+                    }
                 }
 
                 // Find existing Arcosian characters
                 const arcosianCharacters = await database.all(
-                    'SELECT id, name, owner_id FROM characters WHERE race = ?',
+                    isPostgres ? 
+                        'SELECT id, name, owner_id FROM characters WHERE race = $1' :
+                        'SELECT id, name, owner_id FROM characters WHERE race = ?',
                     ['Arcosian']
                 );
 
@@ -74,15 +105,25 @@ module.exports = {
 
                 for (const character of arcosianCharacters) {
                     const hasForm = await database.get(
-                        'SELECT * FROM character_forms WHERE character_id = ? AND form_key = ?',
+                        isPostgres ?
+                            'SELECT * FROM character_forms WHERE character_id = $1 AND form_key = $2' :
+                            'SELECT * FROM character_forms WHERE character_id = ? AND form_key = ?',
                         [character.id, 'minimal']
                     );
 
                     if (!hasForm) {
-                        await database.run(`
-                            INSERT OR IGNORE INTO character_forms (character_id, form_key, is_active)
-                            VALUES (?, ?, ?)
-                        `, [character.id, 'minimal', false]);
+                        if (isPostgres) {
+                            await database.run(`
+                                INSERT INTO character_forms (character_id, form_key, is_active)
+                                VALUES ($1, $2, $3)
+                                ON CONFLICT (character_id, form_key) DO NOTHING
+                            `, [character.id, 'minimal', false]);
+                        } else {
+                            await database.run(`
+                                INSERT OR IGNORE INTO character_forms (character_id, form_key, is_active)
+                                VALUES (?, ?, ?)
+                            `, [character.id, 'minimal', false]);
+                        }
 
                         grantedCount++;
                     } else {
