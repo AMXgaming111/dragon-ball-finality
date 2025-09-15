@@ -18,7 +18,9 @@ const {
     addTechniqueEffect,
     getTechniqueEffects,
     calculateEffectiveStats,
-    handleMajinMagic
+    handleMajinMagic,
+    getTransformedStats,
+    getCurrentActiveForm
 } = require('../utils/calculations');
 const { storePendingAttack, cleanupExpiredAttacks, addKiDisplay } = require('../utils/combat');
 const { autoManageTurnOrder } = require('../../helper_functions');
@@ -235,6 +237,21 @@ module.exports = {
             );
 
             // Create attack type selection embed
+            // Get transformed stats for display
+            const baseStats = {
+                strength: attackerData.strength,
+                defense: attackerData.defense,
+                agility: attackerData.agility,
+                endurance: attackerData.endurance,
+                control: attackerData.control
+            };
+
+            const { stats: transformedStats, form: attackerForm } = await getTransformedStats(
+                database,
+                attackerData.active_character_id,
+                baseStats
+            );
+
             const embed = new EmbedBuilder()
                 .setColor(0xe74c3c)
                 .setTitle('🥊 How would you like to attack?')
@@ -245,6 +262,33 @@ module.exports = {
                     { name: 'Target', value: `${targetData.name}`, inline: true },
                     { name: 'Effort Level', value: `${effort}/5`, inline: true }
                 );
+
+            // Show current stats (with transformed values in parentheses if different)
+            const formatStat = (baseStat, transformedStat) => {
+                if (baseStat === transformedStat) {
+                    return baseStat.toString();
+                } else {
+                    return `${baseStat} (${transformedStat})`;
+                }
+            };
+
+            embed.addFields(
+                { name: 'STR', value: formatStat(baseStats.strength, transformedStats.strength), inline: true },
+                { name: 'DEF', value: formatStat(baseStats.defense, transformedStats.defense), inline: true },
+                { name: 'AGI', value: formatStat(baseStats.agility, transformedStats.agility), inline: true },
+                { name: 'END', value: formatStat(baseStats.endurance, transformedStats.endurance), inline: true },
+                { name: 'CON', value: formatStat(baseStats.control, transformedStats.control), inline: true },
+                { name: '\u200b', value: '\u200b', inline: true } // Empty field for spacing
+            );
+
+            // Show current form if active
+            if (attackerForm) {
+                embed.addFields({
+                    name: 'Current State',
+                    value: `**${attackerForm.name}**`,
+                    inline: false
+                });
+            }
 
             if (accuracyMultiplier !== 1) {
                 embed.addFields({ name: 'Accuracy Modifier', value: `×${accuracyMultiplier}`, inline: true });

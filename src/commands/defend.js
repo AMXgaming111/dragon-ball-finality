@@ -14,7 +14,9 @@ const {
     getCombatBonuses,
     getCurrentKiCap,
     generateHealthBar,
-    calculateMaxHealthForCharacter
+    calculateMaxHealthForCharacter,
+    getTransformedStats,
+    getCurrentActiveForm
 } = require('../utils/calculations');
 const { getPendingAttack, getLatestAttackFromUser, resolveCombat, createCombatResultEmbed, cleanupExpiredAttacks, addKiDisplay } = require('../utils/combat');
 const { autoManageTurnOrder, advanceTurnFromInteraction, applyEndOfTurnEffects } = require('../../helper_functions');
@@ -160,6 +162,21 @@ module.exports = {
                 combatBonuses.majinMagicBonus
             );
 
+            // Get transformed stats for defender display
+            const baseStats = {
+                strength: defenderData.strength,
+                defense: defenderData.defense,
+                agility: defenderData.agility,
+                endurance: defenderData.endurance,
+                control: defenderData.control
+            };
+
+            const { stats: transformedStats, form: defenderForm } = await getTransformedStats(
+                database,
+                defenderData.active_character_id,
+                baseStats
+            );
+
             // Create defense type selection embed
             const embed = new EmbedBuilder()
                 .setColor(0x2ecc71)
@@ -170,6 +187,33 @@ module.exports = {
                     { name: 'Attacker', value: `${attackerData.name}`, inline: true },
                     { name: 'Effort Level', value: `${effort}/5`, inline: true }
                 );
+
+            // Show current stats (with transformed values in parentheses if different)
+            const formatStat = (baseStat, transformedStat) => {
+                if (baseStat === transformedStat) {
+                    return baseStat.toString();
+                } else {
+                    return `${baseStat} (${transformedStat})`;
+                }
+            };
+
+            embed.addFields(
+                { name: 'STR', value: formatStat(baseStats.strength, transformedStats.strength), inline: true },
+                { name: 'DEF', value: formatStat(baseStats.defense, transformedStats.defense), inline: true },
+                { name: 'AGI', value: formatStat(baseStats.agility, transformedStats.agility), inline: true },
+                { name: 'END', value: formatStat(baseStats.endurance, transformedStats.endurance), inline: true },
+                { name: 'CON', value: formatStat(baseStats.control, transformedStats.control), inline: true },
+                { name: '\u200b', value: '\u200b', inline: true } // Empty field for spacing
+            );
+
+            // Show current form if active
+            if (defenderForm) {
+                embed.addFields({
+                    name: 'Current State',
+                    value: `**${defenderForm.name}**`,
+                    inline: false
+                });
+            }
 
             const blockButton = new ButtonBuilder()
                 .setCustomId('defend_block')

@@ -1,6 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { staffRoleName, racials, magicAffinityDisplayNames } = require('../utils/config');
-const { hasStaffRole } = require('../utils/calculations');
+const { hasStaffRole, getTransformedStats } = require('../utils/calculations');
 
 module.exports = {
     name: 'stats',
@@ -38,20 +38,56 @@ module.exports = {
             const characterRacials = characterData.racials ? characterData.racials.split(',') : [];
 
             // Generate main stats embed
-            const generateStatsEmbed = () => {
+            const generateStatsEmbed = async () => {
+                // Get transformed stats
+                const baseStats = {
+                    strength: userData.strength,
+                    defense: userData.defense,
+                    agility: userData.agility,
+                    endurance: userData.endurance,
+                    control: userData.control
+                };
+
+                const { stats: transformedStats, form: activeForm } = await getTransformedStats(
+                    database, 
+                    userData.active_character_id, 
+                    baseStats
+                );
+
                 const embed = new EmbedBuilder()
                     .setColor(0x3498db)
                     .setTitle(`${userData.name}'s Stats`)
                     .setThumbnail(userData.image_url || require('../utils/config').defaultCharacterImage)
                     .addFields(
-                        { name: 'Base PL', value: userData.base_pl.toString(), inline: false },
-                        { name: 'Strength', value: userData.strength.toString(), inline: true },
-                        { name: 'Defense', value: userData.defense.toString(), inline: true },
-                        { name: 'Agility', value: userData.agility.toString(), inline: true },
-                        { name: 'Endurance', value: userData.endurance.toString(), inline: true },
-                        { name: 'Control', value: userData.control.toString(), inline: true },
-                        { name: 'Race', value: userData.race, inline: true }
+                        { name: 'Base PL', value: userData.base_pl.toString(), inline: false }
                     );
+
+                // Add stats with transformed values in parentheses if different
+                const formatStat = (baseStat, transformedStat, statName) => {
+                    if (baseStat === transformedStat) {
+                        return baseStat.toString();
+                    } else {
+                        return `${baseStat} (${transformedStat})`;
+                    }
+                };
+
+                embed.addFields(
+                    { name: 'Strength', value: formatStat(baseStats.strength, transformedStats.strength), inline: true },
+                    { name: 'Defense', value: formatStat(baseStats.defense, transformedStats.defense), inline: true },
+                    { name: 'Agility', value: formatStat(baseStats.agility, transformedStats.agility), inline: true },
+                    { name: 'Endurance', value: formatStat(baseStats.endurance, transformedStats.endurance), inline: true },
+                    { name: 'Control', value: formatStat(baseStats.control, transformedStats.control), inline: true },
+                    { name: 'Race', value: userData.race, inline: true }
+                );
+
+                // Show current form if active
+                if (activeForm) {
+                    embed.addFields({
+                        name: 'Current State',
+                        value: `**${activeForm.name}**`,
+                        inline: false
+                    });
+                }
 
                 // Add specializations if any are set
                 if (userData.primary_specialization || userData.secondary_specialization) {
@@ -175,7 +211,7 @@ module.exports = {
 
             // Send initial message
             const response = await message.reply({
-                embeds: [generateStatsEmbed()],
+                embeds: [await generateStatsEmbed()],
                 components: [createButtons('stats')]
             });
 
@@ -197,7 +233,7 @@ module.exports = {
 
                 switch (interaction.customId) {
                     case 'view_stats':
-                        embed = generateStatsEmbed();
+                        embed = await generateStatsEmbed();
                         currentView = 'stats';
                         break;
                     case 'view_skills':
