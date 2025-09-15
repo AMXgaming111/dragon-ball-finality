@@ -77,6 +77,7 @@ module.exports = {
                     { name: 'Agility', value: formatStat(baseStats.agility, transformedStats.agility), inline: true },
                     { name: 'Endurance', value: formatStat(baseStats.endurance, transformedStats.endurance), inline: true },
                     { name: 'Control', value: formatStat(baseStats.control, transformedStats.control), inline: true },
+                    { name: 'AP', value: (userData.ap || 0).toString(), inline: true },
                     { name: 'Race', value: userData.race, inline: true }
                 );
 

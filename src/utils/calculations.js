@@ -815,6 +815,142 @@ async function calculateTechniqueDamageReduction(database, characterId, channelI
     return Math.min(totalReduction, 0.8); // Cap at 80% reduction
 }
 
+/**
+ * Get the current active form for a character
+ */
+async function getCurrentActiveForm(database, characterId) {
+    return await database.get(`
+        SELECT f.*, cf.is_active
+        FROM character_forms cf
+        JOIN forms f ON cf.form_key = f.form_key
+        WHERE cf.character_id = ? AND cf.is_active = 1
+        LIMIT 1
+    `, [characterId]);
+}
+
+/**
+ * Apply form modifiers to character stats
+ */
+function applyFormModifiers(baseStats, form) {
+    if (!form) return baseStats;
+
+    const modifiedStats = { ...baseStats };
+
+    // Apply strength modifier
+    if (form.strength_modifier) {
+        if (form.strength_modifier.startsWith('*')) {
+            modifiedStats.strength = Math.round(baseStats.strength * parseFloat(form.strength_modifier.replace('*', '')));
+        } else if (form.strength_modifier.startsWith('+')) {
+            modifiedStats.strength = baseStats.strength + parseInt(form.strength_modifier.replace('+', ''));
+        } else if (form.strength_modifier.startsWith('-')) {
+            modifiedStats.strength = baseStats.strength - parseInt(form.strength_modifier.replace('-', ''));
+        }
+    }
+
+    // Apply defense modifier
+    if (form.defense_modifier) {
+        if (form.defense_modifier.startsWith('*')) {
+            modifiedStats.defense = Math.round(baseStats.defense * parseFloat(form.defense_modifier.replace('*', '')));
+        } else if (form.defense_modifier.startsWith('+')) {
+            modifiedStats.defense = baseStats.defense + parseInt(form.defense_modifier.replace('+', ''));
+        } else if (form.defense_modifier.startsWith('-')) {
+            modifiedStats.defense = baseStats.defense - parseInt(form.defense_modifier.replace('-', ''));
+        }
+    }
+
+    // Apply agility modifier
+    if (form.agility_modifier) {
+        if (form.agility_modifier.startsWith('*')) {
+            modifiedStats.agility = Math.round(baseStats.agility * parseFloat(form.agility_modifier.replace('*', '')));
+        } else if (form.agility_modifier.startsWith('+')) {
+            modifiedStats.agility = baseStats.agility + parseInt(form.agility_modifier.replace('+', ''));
+        } else if (form.agility_modifier.startsWith('-')) {
+            modifiedStats.agility = baseStats.agility - parseInt(form.agility_modifier.replace('-', ''));
+        }
+    }
+
+    // Apply endurance modifier
+    if (form.endurance_modifier) {
+        if (form.endurance_modifier.startsWith('*')) {
+            modifiedStats.endurance = Math.round(baseStats.endurance * parseFloat(form.endurance_modifier.replace('*', '')));
+        } else if (form.endurance_modifier.startsWith('+')) {
+            modifiedStats.endurance = baseStats.endurance + parseInt(form.endurance_modifier.replace('+', ''));
+        } else if (form.endurance_modifier.startsWith('-')) {
+            modifiedStats.endurance = baseStats.endurance - parseInt(form.endurance_modifier.replace('-', ''));
+        }
+    }
+
+    // Apply control modifier
+    if (form.control_modifier) {
+        if (form.control_modifier.startsWith('*')) {
+            modifiedStats.control = Math.round(baseStats.control * parseFloat(form.control_modifier.replace('*', '')));
+        } else if (form.control_modifier.startsWith('+')) {
+            modifiedStats.control = baseStats.control + parseInt(form.control_modifier.replace('+', ''));
+        } else if (form.control_modifier.startsWith('-')) {
+            modifiedStats.control = baseStats.control - parseInt(form.control_modifier.replace('-', ''));
+        }
+    }
+
+    // Ensure no stat goes below 1
+    modifiedStats.strength = Math.max(1, modifiedStats.strength);
+    modifiedStats.defense = Math.max(1, modifiedStats.defense);
+    modifiedStats.agility = Math.max(1, modifiedStats.agility);
+    modifiedStats.endurance = Math.max(1, modifiedStats.endurance);
+    modifiedStats.control = Math.max(1, modifiedStats.control);
+
+    return modifiedStats;
+}
+
+/**
+ * Get character stats with form transformations applied
+ */
+async function getTransformedStats(database, characterId, baseStats) {
+    const activeForm = await getCurrentActiveForm(database, characterId);
+    if (!activeForm) return { stats: baseStats, form: null };
+
+    const transformedStats = applyFormModifiers(baseStats, activeForm);
+    return { stats: transformedStats, form: activeForm };
+}
+
+// Calculate stat caps for AP system based on race, specializations, and advanced ki control
+function calculateStatCaps(character) {
+    const { racialCaps } = require('./config');
+    
+    // Get base racial caps
+    const baseCaps = racialCaps[character.race];
+    if (!baseCaps) {
+        throw new Error(`Unknown race: ${character.race}`);
+    }
+    
+    const caps = { ...baseCaps };
+    
+    // Apply advanced ki control multiplier (doubles all caps except control)
+    if (character.ki_control >= 2) {
+        caps.strength *= 2;
+        caps.defense *= 2;
+        caps.agility *= 2;
+        caps.endurance *= 2;
+        // Control cap remains the same
+    }
+    
+    // Apply specialization bonuses
+    if (character.primary_specialization) {
+        const stat = character.primary_specialization;
+        if (caps[stat] !== undefined) {
+            caps[stat] = Math.floor(caps[stat] * 1.2); // 20% increase
+        }
+    }
+    
+    if (character.secondary_specialization) {
+        const stat = character.secondary_specialization;
+        if (caps[stat] !== undefined) {
+            caps[stat] = Math.floor(caps[stat] * 1.1); // 10% increase
+        }
+    }
+    
+    return caps;
+}
+
 module.exports.addTechniqueEffect = addTechniqueEffect;
 module.exports.getTechniqueEffects = getTechniqueEffects;
 module.exports.getTechniqueEffectsOnTarget = getTechniqueEffectsOnTarget;
@@ -822,3 +958,7 @@ module.exports.decrementTechniqueEffects = decrementTechniqueEffects;
 module.exports.removeTechniqueEffect = removeTechniqueEffect;
 module.exports.calculateEffectiveStats = calculateEffectiveStats;
 module.exports.calculateTechniqueDamageReduction = calculateTechniqueDamageReduction;
+module.exports.getCurrentActiveForm = getCurrentActiveForm;
+module.exports.applyFormModifiers = applyFormModifiers;
+module.exports.getTransformedStats = getTransformedStats;
+module.exports.calculateStatCaps = calculateStatCaps;
