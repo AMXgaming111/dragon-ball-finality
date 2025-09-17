@@ -300,26 +300,22 @@ module.exports = {
 };
 
 async function handleBlock(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack, damageModifier = 0, damageRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
-    // Get transformed stats for the defender
-    const defenderBaseStats = {
-        strength: defenderData.strength,
-        defense: defenderData.defense,
-        agility: defenderData.agility,
-        endurance: defenderData.endurance,
-        control: defenderData.control
-    };
-
-    const { stats: defenderTransformedStats } = await getTransformedStats(
-        database,
-        defenderData.active_character_id,
-        defenderBaseStats
-    );
-
-    const maxAdditive = ((defenderTransformedStats.strength + defenderData.endurance + defenderTransformedStats.control) / 6).toFixed(2);
+    // Check for Namekian Giant Form bonus for max additive calculation
+    let effectiveStrength = defenderData.strength;
+    const giantForm = await database.get(`
+        SELECT is_active FROM character_racials 
+        WHERE character_id = ? AND racial_tag = 'ngiant' AND is_active = 1
+    `, [defenderData.active_character_id]);
+    
+    if (giantForm) {
+        effectiveStrength += 40; // Giant form grants +40 strength
+    }
+    
+    const maxAdditive = ((effectiveStrength + defenderData.endurance + defenderData.control) / 6).toFixed(2);
     
     // Calculate maximum affordable multiplier
     const defenderCurrentKi = defenderData.current_ki !== null ? defenderData.current_ki : defenderData.endurance;
-    const maxMultiplier = calculateMaxAffordableMultiplier(defenderCurrentKi, defenderTransformedStats.control, effort, 1, defenderData.endurance);
+    const maxMultiplier = calculateMaxAffordableMultiplier(defenderCurrentKi, defenderData.control, effort, 1, defenderData.endurance);
     
     const embed = new EmbedBuilder()
         .setColor(0x95a5a6)
@@ -564,26 +560,22 @@ async function handleBlock(interaction, defenderData, attackerData, defenderEffe
 }
 
 async function handleDodge(interaction, defenderData, attackerData, defenderEffectivePL, effort, database, pendingAttack, damageModifier = 0, damageRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
-    // Get transformed stats for the defender
-    const defenderBaseStats = {
-        strength: defenderData.strength,
-        defense: defenderData.defense,
-        agility: defenderData.agility,
-        endurance: defenderData.endurance,
-        control: defenderData.control
-    };
-
-    const { stats: defenderTransformedStats } = await getTransformedStats(
-        database,
-        defenderData.active_character_id,
-        defenderBaseStats
-    );
-
-    const maxAdditive = ((defenderTransformedStats.strength + defenderData.endurance + defenderTransformedStats.control) / 6).toFixed(2);
+    // Check for Namekian Giant Form bonus for max additive calculation
+    let effectiveStrength = defenderData.strength;
+    const giantForm = await database.get(`
+        SELECT is_active FROM character_racials 
+        WHERE character_id = ? AND racial_tag = 'ngiant' AND is_active = 1
+    `, [defenderData.active_character_id]);
+    
+    if (giantForm) {
+        effectiveStrength += 40; // Giant form grants +40 strength
+    }
+    
+    const maxAdditive = ((effectiveStrength + defenderData.endurance + defenderData.control) / 6).toFixed(2);
     
     // Calculate maximum affordable multiplier
     const defenderCurrentKi = defenderData.current_ki !== null ? defenderData.current_ki : defenderData.endurance;
-    const maxMultiplier = calculateMaxAffordableMultiplier(defenderCurrentKi, defenderTransformedStats.control, effort, 1, defenderData.endurance);
+    const maxMultiplier = calculateMaxAffordableMultiplier(defenderCurrentKi, defenderData.control, effort, 1, defenderData.endurance);
     
     const embed = new EmbedBuilder()
         .setColor(0x3498db)
@@ -717,7 +709,7 @@ async function handleDodge(interaction, defenderData, attackerData, defenderEffe
 
     // Calculate dodge value with accuracy agility modifier
     // Note: Agility uses the traditional multiplier system, not progression modifier
-    const effectiveAgilityWithModifier = Math.max(1, defenderTransformedStats.agility + accuracyAgilityModifier);
+    const effectiveAgilityWithModifier = Math.max(1, defenderData.agility + accuracyAgilityModifier);
     let dodgeValue;
     if (isBasic) {
         dodgeValue = calculateAccuracy(updatedEffectivePL, effectiveAgilityWithModifier, 0, false);

@@ -278,6 +278,24 @@ module.exports = {
                     { name: 'Effort Level', value: `${effort}/5`, inline: true }
                 );
 
+            // Show current stats (with transformed values in parentheses if different)
+            const formatStat = (baseStat, transformedStat) => {
+                if (baseStat === transformedStat) {
+                    return baseStat.toString();
+                } else {
+                    return `${baseStat} (${transformedStat})`;
+                }
+            };
+
+            embed.addFields(
+                { name: 'STR', value: formatStat(baseStats.strength, transformedStats.strength), inline: true },
+                { name: 'DEF', value: formatStat(baseStats.defense, transformedStats.defense), inline: true },
+                { name: 'AGI', value: formatStat(baseStats.agility, transformedStats.agility), inline: true },
+                { name: 'END', value: formatStat(baseStats.endurance, transformedStats.endurance), inline: true },
+                { name: 'CON', value: formatStat(baseStats.control, transformedStats.control), inline: true },
+                { name: '\u200b', value: '\u200b', inline: true } // Empty field for spacing
+            );
+
             // Show current form if active
             if (attackerForm) {
                 embed.addFields({
@@ -285,6 +303,10 @@ module.exports = {
                     value: `**${attackerForm.name}**`,
                     inline: false
                 });
+            }
+
+            if (accuracyMultiplier !== 1) {
+                embed.addFields({ name: 'Accuracy Modifier', value: `×${accuracyMultiplier}`, inline: true });
             }
 
             const physicalButton = new ButtonBuilder()
@@ -361,26 +383,17 @@ module.exports = {
 };
 
 async function handlePhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
-    // First get transformed stats from active states/forms
+    // Get effective stats including technique effects (like Clear Mind)
     const baseStats = {
         control: attackerData.control,
         strength: attackerData.strength,
         agility: attackerData.agility,
-        endurance: attackerData.endurance,
-        defense: attackerData.defense
+        endurance: attackerData.endurance
     };
-    
-    const { stats: transformedStats } = await getTransformedStats(
-        database,
-        attackerData.active_character_id,
-        baseStats
-    );
-    
-    // Then apply technique effects on top of transformed stats
-    const effectiveStats = await calculateEffectiveStats(database, attackerData.active_character_id, interaction.channel.id, transformedStats);
+    const effectiveStats = await calculateEffectiveStats(database, attackerData.active_character_id, interaction.channel.id, baseStats);
     
     // Check for Namekian Giant Form bonus for max additive calculation
-    let effectiveStrength = effectiveStats.strength; // Use effective strength from both state transformations and technique effects
+    let effectiveStrength = effectiveStats.strength; // Use effective strength from technique effects
     const giantForm = await database.get(`
         SELECT is_active FROM character_racials 
         WHERE character_id = ? AND racial_tag = 'ngiant' AND is_active = 1
@@ -390,8 +403,7 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
         effectiveStrength += 40; // Giant form grants +40 strength
     }
     
-    // Maximum additive calculation now uses transformed endurance from states as well
-    const maxAdditive = ((effectiveStrength + effectiveStats.endurance + effectiveStats.control) / 6).toFixed(2);
+    const maxAdditive = ((effectiveStrength + attackerData.endurance + effectiveStats.control) / 6).toFixed(2);
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
         .setTitle('💪 Physical Combat')
@@ -449,21 +461,6 @@ async function handlePhysicalAttack(interaction, attackerData, targetData, attac
 }
 
 async function handleBasicPhysicalAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, maxAdditive, effectiveStats, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
-    // Get transformed stats for the attacker
-    const attackerBaseStats = {
-        strength: attackerData.strength,
-        defense: attackerData.defense,
-        agility: attackerData.agility,
-        endurance: attackerData.endurance,
-        control: attackerData.control
-    };
-
-    const { stats: attackerTransformedStats } = await getTransformedStats(
-        database,
-        attackerData.active_character_id,
-        attackerBaseStats
-    );
-
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
         .setTitle('💪 Physical Attack')
@@ -777,27 +774,18 @@ async function handleTechniqueSelection(interaction, attackerData, targetData, a
 }
 
 async function handleKiAttack(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
-    // First get transformed stats from active states/forms
+    // Get effective stats including technique effects (like Clear Mind)
     const baseStats = {
         control: attackerData.control,
         strength: attackerData.strength,
         agility: attackerData.agility,
-        endurance: attackerData.endurance,
-        defense: attackerData.defense
+        endurance: attackerData.endurance
     };
+    const effectiveStats = await calculateEffectiveStats(database, attackerData.active_character_id, interaction.channel.id, baseStats);
     
-    const { stats: transformedStats } = await getTransformedStats(
-        database,
-        attackerData.active_character_id,
-        baseStats
-    );
-    
-    // Then apply technique effects on top of transformed stats
-    const effectiveStats = await calculateEffectiveStats(database, attackerData.active_character_id, interaction.channel.id, transformedStats);
-    
-    // Calculate maximum affordable multiplier with effective control (now uses transformed endurance)
-    const attackerCurrentKi = attackerData.current_ki !== null ? attackerData.current_ki : transformedStats.endurance;
-    const maxMultiplier = calculateMaxAffordableMultiplier(attackerCurrentKi, effectiveStats.control, effort, accuracyMultiplier, transformedStats.endurance);
+    // Calculate maximum affordable multiplier with effective control
+    const attackerCurrentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
+    const maxMultiplier = calculateMaxAffordableMultiplier(attackerCurrentKi, effectiveStats.control, effort, accuracyMultiplier, attackerData.endurance);
     
     // Check if any multipliers are affordable
     if (maxMultiplier === 0) {
@@ -1229,21 +1217,6 @@ async function handleGuard(interaction, attackerData, targetData, database) {
 }
 
 async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
-    // Get transformed stats for the attacker
-    const attackerBaseStats = {
-        strength: attackerData.strength,
-        defense: attackerData.defense,
-        agility: attackerData.agility,
-        endurance: attackerData.endurance,
-        control: attackerData.control
-    };
-
-    const { stats: attackerTransformedStats } = await getTransformedStats(
-        database,
-        attackerData.active_character_id,
-        attackerBaseStats
-    );
-
     // Heavy Blow - Normal attack + agility debuff if damage dealt (FREE) - with modifiers
     const effectiveStrengthWithModifier = Math.max(1, attackerTransformedStats.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
@@ -1255,15 +1228,15 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     // Apply effort ki costs
-    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerTransformedStats.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
     let totalKiCost = 0; // Heavy Blow is free, but effort still costs
     
     if (effortKiCost > 0) {
-        totalKiCost += Math.max(1, Math.floor(attackerTransformedStats.endurance * (effortKiCost / 100)));
+        totalKiCost += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
     } else if (effortKiCost < 0) {
         // Effort 1 gives ki even on free techniques
-        totalKiCost -= Math.max(1, Math.floor(attackerTransformedStats.endurance * (Math.abs(effortKiCost) / 100)));
+        totalKiCost -= Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
     }
     
     // Apply ki change
@@ -1280,7 +1253,7 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
     // Get ki information for display (use updated ki)
-    const maxKi = attackerTransformedStats.endurance;
+    const maxKi = attackerData.endurance;
     const kiPercentage = Math.max(0, (newKi / maxKi) * 100);
     const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
 
@@ -1324,21 +1297,6 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
 }
 
 async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
-    // Get transformed stats for the attacker
-    const attackerBaseStats = {
-        strength: attackerData.strength,
-        defense: attackerData.defense,
-        agility: attackerData.agility,
-        endurance: attackerData.endurance,
-        control: attackerData.control
-    };
-
-    const { stats: attackerTransformedStats } = await getTransformedStats(
-        database,
-        attackerData.active_character_id,
-        attackerBaseStats
-    );
-
     // Feint - Attack with dodge penalty (FREE) - with modifiers
     const effectiveStrengthWithModifier = Math.max(1, attackerTransformedStats.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
@@ -1350,15 +1308,15 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
 
     // Apply effort ki costs
-    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerTransformedStats.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
     let totalKiCost = 0; // Feint is free, but effort still costs
     
     if (effortKiCost > 0) {
-        totalKiCost += Math.max(1, Math.floor(attackerTransformedStats.endurance * (effortKiCost / 100)));
+        totalKiCost += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
     } else if (effortKiCost < 0) {
         // Effort 1 gives ki even on free techniques
-        totalKiCost -= Math.max(1, Math.floor(attackerTransformedStats.endurance * (Math.abs(effortKiCost) / 100)));
+        totalKiCost -= Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
     }
     
     // Apply ki change
@@ -1375,7 +1333,7 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
     const attackerUser = await interaction.client.users.fetch(attackerData.owner_id);
 
     // Get ki information for display (use updated ki)
-    const maxKi = attackerTransformedStats.endurance;
+    const maxKi = attackerData.endurance;
     const kiPercentage = Math.max(0, (newKi / maxKi) * 100);
     const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
 
@@ -1415,27 +1373,12 @@ async function handleFeint(interaction, attackerData, targetData, attackerEffect
 }
 
 async function handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
-    // Get transformed stats from active states/forms
-    const baseStats = {
-        strength: attackerData.strength,
-        defense: attackerData.defense,
-        agility: attackerData.agility,
-        endurance: attackerData.endurance,
-        control: attackerData.control
-    };
-    
-    const { stats: transformedStats } = await getTransformedStats(
-        database,
-        attackerData.active_character_id,
-        baseStats
-    );
-
     // Check ki cost (4 ki base + effort, unaffected by control)
-    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : transformedStats.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
     let totalRequiredKi = 4; // Base cost
     if (effortKiCost > 0) {
-        totalRequiredKi += Math.max(1, Math.floor(transformedStats.endurance * (effortKiCost / 100)));
+        totalRequiredKi += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
     }
     
     if (currentKi < totalRequiredKi) {
@@ -1446,12 +1389,12 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
-    // Weakpoint - Reduced strength roll, but 7% health damage if not fully defended - with modifiers using transformed stats
-    const effectiveStrengthWithModifier = Math.max(1, transformedStats.strength + damageModifier);
+    // Weakpoint - Reduced strength roll, but 7% health damage if not fully defended - with modifiers
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier * 0.7, 0, database, attackerData.active_character_id); // -0.3x penalty for display
     
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, transformedStats.agility + totalAgilityModifier, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
     
     const displayDamage = rollWithEffort(baseDamage, effort) * damageRollMultiplier; // For display only
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
@@ -1463,9 +1406,9 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
     // Calculate total ki cost including effort (use the same calculation as the check above)
     let totalKiCost = 4; // Base cost
     if (effortKiCost > 0) {
-        totalKiCost += Math.max(1, Math.floor(transformedStats.endurance * (effortKiCost / 100)));
+        totalKiCost += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
     } else if (effortKiCost < 0) {
-        totalKiCost -= Math.max(1, Math.floor(transformedStats.endurance * (Math.abs(effortKiCost) / 100)));
+        totalKiCost -= Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
     }
     
     // Deduct ki cost
@@ -1522,27 +1465,12 @@ async function handleWeakpoint(interaction, attackerData, targetData, attackerEf
 }
 
 async function handleDoubleStrike(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
-    // Get transformed stats from active states/forms
-    const baseStats = {
-        strength: attackerData.strength,
-        defense: attackerData.defense,
-        agility: attackerData.agility,
-        endurance: attackerData.endurance,
-        control: attackerData.control
-    };
-    
-    const { stats: transformedStats } = await getTransformedStats(
-        database,
-        attackerData.active_character_id,
-        baseStats
-    );
-
     // Check ki cost (4 ki base + effort, unaffected by control)
-    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : transformedStats.endurance;
+    const currentKi = attackerData.current_ki !== null ? attackerData.current_ki : attackerData.endurance;
     const effortKiCost = getEffortKiCost(effort);
     let totalRequiredKi = 4; // Base cost
     if (effortKiCost > 0) {
-        totalRequiredKi += Math.max(1, Math.floor(transformedStats.endurance * (effortKiCost / 100)));
+        totalRequiredKi += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
     }
     
     if (currentKi < totalRequiredKi) {
@@ -1553,12 +1481,12 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
         return interaction.editReply({ embeds: [errorEmbed], components: [] });
     }
 
-    // Double Strike - Roll twice and add together - with modifiers using transformed stats
-    const effectiveStrengthWithModifier = Math.max(1, transformedStats.strength + damageModifier);
+    // Double Strike - Roll twice and add together - with modifiers
+    const effectiveStrengthWithModifier = Math.max(1, attackerData.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
     
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, transformedStats.agility + totalAgilityModifier, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerData.agility + totalAgilityModifier, 0, false);
     
     const damage1 = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
     const damage2 = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
@@ -1571,9 +1499,9 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
     // Calculate total ki cost including effort (use the same calculation as the check above)
     let totalKiCost = 4; // Base cost
     if (effortKiCost > 0) {
-        totalKiCost += Math.max(1, Math.floor(transformedStats.endurance * (effortKiCost / 100)));
+        totalKiCost += Math.max(1, Math.floor(attackerData.endurance * (effortKiCost / 100)));
     } else if (effortKiCost < 0) {
-        totalKiCost -= Math.max(1, Math.floor(transformedStats.endurance * (Math.abs(effortKiCost) / 100)));
+        totalKiCost -= Math.max(1, Math.floor(attackerData.endurance * (Math.abs(effortKiCost) / 100)));
     }
 
     // Deduct ki cost
@@ -1586,7 +1514,7 @@ async function handleDoubleStrike(interaction, attackerData, targetData, attacke
     );
 
     // Generate ki bar for display
-    const maxKi = transformedStats.endurance;
+    const maxKi = attackerData.endurance;
     const kiPercentage = Math.max(0, (newKi / maxKi) * 100);
     const kiBar = generateKiBar(Math.min(120, kiPercentage), '1400943268170301561');
 
