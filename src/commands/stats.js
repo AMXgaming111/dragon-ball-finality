@@ -1,6 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { staffRoleName, racials, magicAffinityDisplayNames } = require('../utils/config');
-const { hasStaffRole, getTransformedStats, calculateStatCaps } = require('../utils/calculations');
+const { hasStaffRole, getTransformedStats } = require('../utils/calculations');
 
 module.exports = {
     name: 'stats',
@@ -54,9 +54,6 @@ module.exports = {
                     baseStats
                 );
 
-                // Calculate caps for this character
-                const caps = calculateStatCaps(userData);
-
                 const embed = new EmbedBuilder()
                     .setColor(0x3498db)
                     .setTitle(`${userData.name}'s Stats`)
@@ -65,27 +62,26 @@ module.exports = {
                         { name: 'Base PL', value: userData.base_pl.toString(), inline: false }
                     );
 
-                // Add stats with caps and transformed values in parentheses if different
-                const formatStatWithCap = (baseStat, transformedStat, cap, statName) => {
-                    const capDisplay = `${baseStat}/${cap}`;
+                // Format stats as current (transformed) if different, otherwise just current
+                const formatStat = (baseStat, transformedStat) => {
                     if (baseStat === transformedStat) {
-                        return capDisplay;
+                        return baseStat.toString();
                     } else {
-                        return `${capDisplay} (${transformedStat})`;
+                        return `${baseStat} (${transformedStat})`;
                     }
                 };
 
                 embed.addFields(
-                    { name: 'Strength', value: formatStatWithCap(baseStats.strength, transformedStats.strength, caps.strength), inline: true },
-                    { name: 'Defense', value: formatStatWithCap(baseStats.defense, transformedStats.defense, caps.defense), inline: true },
-                    { name: 'Agility', value: formatStatWithCap(baseStats.agility, transformedStats.agility, caps.agility), inline: true },
-                    { name: 'Endurance', value: formatStatWithCap(baseStats.endurance, transformedStats.endurance, caps.endurance), inline: true },
-                    { name: 'Control', value: formatStatWithCap(baseStats.control, transformedStats.control, caps.control), inline: true },
-                    { name: 'Race', value: userData.race, inline: true },
-                    { name: 'Attribute Points', value: (userData.ap || 0).toString(), inline: true }
+                    { name: 'Strength', value: formatStat(baseStats.strength, transformedStats.strength), inline: true },
+                    { name: 'Defense', value: formatStat(baseStats.defense, transformedStats.defense), inline: true },
+                    { name: 'Agility', value: formatStat(baseStats.agility, transformedStats.agility), inline: true },
+                    { name: 'Endurance', value: formatStat(baseStats.endurance, transformedStats.endurance), inline: true },
+                    { name: 'Control', value: formatStat(baseStats.control, transformedStats.control), inline: true },
+                    { name: 'AP', value: (userData.ap || 0).toString(), inline: true },
+                    { name: 'Race', value: userData.race, inline: true }
                 );
 
-                // Show current form if active
+                // Show current state if active
                 if (activeForm) {
                     embed.addFields({
                         name: 'Current State',
