@@ -58,7 +58,7 @@ module.exports = {
 
             const characterId = userData.active_character_id;
             const characterName = userData.name;
-            const currentValue = userData[statName];
+            const currentValue = statName === 'ap' ? (userData[statName] || 0) : userData[statName];
 
             // Parse and apply modifier
             const modifier = parseModifier(operation + value);
@@ -66,7 +66,9 @@ module.exports = {
                 return message.reply('Invalid operation! Use +, -, *, /, or set');
             }
 
-            const newValue = Math.max(1, Math.floor(applyModifier(currentValue, modifier)));
+            const newValue = statName === 'ap' 
+                ? Math.max(0, Math.floor(applyModifier(currentValue, modifier)))  // AP can be 0
+                : Math.max(1, Math.floor(applyModifier(currentValue, modifier)));  // Other stats minimum 1
 
             // Update the character's stat
             const updateQuery = `UPDATE characters SET ${statName} = ? WHERE id = ?`;
