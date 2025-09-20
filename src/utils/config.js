@@ -4,6 +4,9 @@ module.exports = {
     prefix: '!',
     staffRoleName: 'Staff',
     defaultCharacterImage: 'https://i.imgur.com/default.png',
+    
+    // Available character races
+    races: ['Human', 'Saiyan', 'Arcosian', 'Namekian', 'Majin', 'Synthetic Majin'],
 
     // Racial stat caps for AP system
     racialCaps: {
