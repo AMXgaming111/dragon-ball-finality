@@ -381,6 +381,30 @@ class Database {
         } catch (error) {
             console.log('Specialization migration handled:', error.message);
         }
+
+        // Migration for AP (Attribute Points) column
+        try {
+            const tableInfo = await this.all(
+                this.usePostgres 
+                    ? 'SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = ?'
+                    : 'PRAGMA table_info(characters)', 
+                this.usePostgres ? ['characters', 'public'] : []
+            );
+            
+            const hasAP = this.usePostgres 
+                ? tableInfo.some(col => col.column_name === 'ap')
+                : tableInfo.some(col => col.name === 'ap');
+            
+            if (!hasAP) {
+                console.log('Adding ap column to characters table...');
+                
+                await this.run(`ALTER TABLE characters ADD COLUMN ap INTEGER DEFAULT 0`);
+                
+                console.log('Migration completed: Added ap column');
+            }
+        } catch (error) {
+            console.log('AP migration handled:', error.message);
+        }
     }
 
     // Wrapper for database queries
