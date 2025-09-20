@@ -5,8 +5,50 @@ module.exports = {
     name: 'ap',
     description: 'Spend Attribute Points to increase stats',
     async execute(message, args, database) {
+        // If no arguments, show current AP and caps
+        if (args.length === 0) {
+            try {
+                const userData = await database.getUserWithActiveCharacter(message.author.id);
+                if (!userData || !userData.active_character_id) {
+                    return message.reply("You don't have an active character.");
+                }
+
+                const currentAP = userData.ap || 0;
+                const caps = calculateStatCaps(
+                    userData.race,
+                    userData.primary_specialization,
+                    userData.secondary_specialization,
+                    userData.control
+                );
+
+                const embed = new EmbedBuilder()
+                    .setColor(0x3498db)
+                    .setTitle(`${userData.name}'s Attribute Points`)
+                    .setDescription(`You have **${currentAP}** AP available for training`)
+                    .addFields(
+                        {
+                            name: '📊 Current Progress vs Caps',
+                            value: `**Strength:** ${userData.strength}/${caps.strength}\n**Defense:** ${userData.defense}/${caps.defense}\n**Agility:** ${userData.agility}/${caps.agility}\n**Endurance:** ${userData.endurance}/${caps.endurance}\n**Control:** ${userData.control}/${caps.control}`,
+                            inline: false
+                        },
+                        {
+                            name: '💡 Usage',
+                            value: '`!ap <stat> <amount>`\n\n**Stats:** str, def, agi, end, cont\n**Example:** `!ap str 5`',
+                            inline: false
+                        }
+                    )
+                    .setFooter({ text: 'Use !apcaps for detailed cap information' })
+                    .setTimestamp();
+
+                return message.reply({ embeds: [embed] });
+            } catch (error) {
+                console.error('Error in ap command (view):', error);
+                return message.reply('There was an error retrieving your AP information.');
+            }
+        }
+        
         if (args.length !== 2) {
-            return message.reply('Usage: `!ap <stat> <amount>`\nStats: str, def, agi, end, cont\nExample: `!ap str 5`');
+            return message.reply('Usage: `!ap <stat> <amount>`\nStats: str, def, agi, end, cont\nExample: `!ap str 5`\n\nOr use `!ap` to view your current AP.');
         }
 
         const statAbbr = args[0].toLowerCase();
@@ -49,7 +91,12 @@ module.exports = {
             }
 
             // Calculate stat caps for this character
-            const caps = calculateStatCaps(userData);
+            const caps = calculateStatCaps(
+                userData.race,
+                userData.primary_specialization,
+                userData.secondary_specialization,
+                userData.control
+            );
             const maxAllowed = caps[statName];
 
             // Check if the upgrade would exceed the cap

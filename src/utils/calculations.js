@@ -912,6 +912,45 @@ async function getTransformedStats(database, characterId, baseStats) {
     return { stats: transformedStats, form: activeForm };
 }
 
+// Calculate stat caps for AP system based on race, specializations, and advanced ki control
+function calculateStatCaps(character) {
+    const { racialCaps } = require('./config');
+    
+    // Get base racial caps
+    const baseCaps = racialCaps[character.race];
+    if (!baseCaps) {
+        throw new Error(`Unknown race: ${character.race}`);
+    }
+    
+    const caps = { ...baseCaps };
+    
+    // Apply advanced ki control multiplier (doubles all caps except control)
+    if (character.ki_control >= 2) {
+        caps.strength *= 2;
+        caps.defense *= 2;
+        caps.agility *= 2;
+        caps.endurance *= 2;
+        // Control cap remains the same
+    }
+    
+    // Apply specialization bonuses
+    if (character.primary_specialization) {
+        const stat = character.primary_specialization;
+        if (caps[stat] !== undefined) {
+            caps[stat] = Math.floor(caps[stat] * 1.2); // 20% increase
+        }
+    }
+    
+    if (character.secondary_specialization) {
+        const stat = character.secondary_specialization;
+        if (caps[stat] !== undefined) {
+            caps[stat] = Math.floor(caps[stat] * 1.1); // 10% increase
+        }
+    }
+    
+    return caps;
+}
+
 module.exports.addTechniqueEffect = addTechniqueEffect;
 module.exports.getTechniqueEffects = getTechniqueEffects;
 module.exports.getTechniqueEffectsOnTarget = getTechniqueEffectsOnTarget;
@@ -922,3 +961,4 @@ module.exports.calculateTechniqueDamageReduction = calculateTechniqueDamageReduc
 module.exports.getCurrentActiveForm = getCurrentActiveForm;
 module.exports.applyFormModifiers = applyFormModifiers;
 module.exports.getTransformedStats = getTransformedStats;
+module.exports.calculateStatCaps = calculateStatCaps;
