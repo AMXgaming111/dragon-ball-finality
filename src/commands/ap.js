@@ -14,12 +14,7 @@ module.exports = {
                 }
 
                 const currentAP = userData.ap || 0;
-                const caps = calculateStatCaps(
-                    userData.race,
-                    userData.primary_specialization,
-                    userData.secondary_specialization,
-                    userData.control
-                );
+                const caps = calculateStatCaps(userData);
 
                 const embed = new EmbedBuilder()
                     .setColor(0x3498db)
@@ -91,12 +86,7 @@ module.exports = {
             }
 
             // Calculate stat caps for this character
-            const caps = calculateStatCaps(
-                userData.race,
-                userData.primary_specialization,
-                userData.secondary_specialization,
-                userData.control
-            );
+            const caps = calculateStatCaps(userData);
             const maxAllowed = caps[statName];
 
             // Check if the upgrade would exceed the cap

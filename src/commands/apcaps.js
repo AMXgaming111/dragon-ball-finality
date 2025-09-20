@@ -18,12 +18,7 @@ module.exports = {
             const baseCaps = racialCaps[race];
             
             // Calculate current caps with all bonuses applied
-            const currentCaps = calculateStatCaps(
-                userData.race,
-                userData.primary_specialization,
-                userData.secondary_specialization,
-                userData.control
-            );
+            const currentCaps = calculateStatCaps(userData);
 
             // Determine advanced ki control multiplier
             let kiControlMultiplier = 1;

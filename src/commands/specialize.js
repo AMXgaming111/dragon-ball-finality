@@ -15,12 +15,7 @@ module.exports = {
             // Handle different argument patterns
             if (args.length === 0) {
                 // View current specializations with cap information
-                const caps = calculateStatCaps(
-                    userData.race,
-                    userData.primary_specialization,
-                    userData.secondary_specialization,
-                    userData.control
-                );
+                const caps = calculateStatCaps(userData);
 
                 const embed = new EmbedBuilder()
                     .setColor(0x3498db)
@@ -93,19 +88,11 @@ module.exports = {
 
             if (args.length === 1 && args[0].toLowerCase() === 'clear') {
                 // Calculate caps before and after clearing
-                const currentCaps = calculateStatCaps(
-                    userData.race,
-                    userData.primary_specialization,
-                    userData.secondary_specialization,
-                    userData.control
-                );
+                const currentCaps = calculateStatCaps(userData);
 
-                const newCaps = calculateStatCaps(
-                    userData.race,
-                    null,
-                    null,
-                    userData.control
-                );
+                // Create temporary userData object for new caps calculation
+                const tempUserData = { ...userData, primary_specialization: null, secondary_specialization: null };
+                const newCaps = calculateStatCaps(tempUserData);
 
                 // Clear specializations
                 await database.run(
@@ -159,7 +146,8 @@ module.exports = {
             }
 
             if (args.length < 2) {
-                const caps = calculateStatCaps(userData.race, null, null, userData.control);
+                const tempUserData = { ...userData, primary_specialization: null, secondary_specialization: null };
+                const caps = calculateStatCaps(tempUserData);
                 
                 let helpText = '**Usage:** `!specialize <primary> <secondary>`\n\n';
                 helpText += '**Valid attributes:** strength, defense, agility, endurance, control\n\n';
@@ -208,19 +196,11 @@ module.exports = {
             }
 
             // Calculate caps before and after specialization
-            const oldCaps = calculateStatCaps(
-                userData.race,
-                userData.primary_specialization,
-                userData.secondary_specialization,
-                userData.control
-            );
+            const oldCaps = calculateStatCaps(userData);
 
-            const newCaps = calculateStatCaps(
-                userData.race,
-                primarySpec,
-                secondarySpec,
-                userData.control
-            );
+            // Create temporary userData object for new caps calculation
+            const tempUserData = { ...userData, primary_specialization: primarySpec, secondary_specialization: secondarySpec };
+            const newCaps = calculateStatCaps(tempUserData);
 
             // Update specializations
             await database.run(
