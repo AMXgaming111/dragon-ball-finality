@@ -48,9 +48,9 @@ async function checkInnateStateActivation(database, characterId, character) {
             WHERE character_id = ? AND form_key = ?
         `, [characterId, state.tag]);
         
-        console.log(`[DEBUG] Current state for ${state.name}: ${currentState ? `active=${currentState.is_active}` : 'not found'}`);
+        console.log(`[DEBUG] Current state for ${state.name}: ${currentState ? `active=${currentState.is_active} (type: ${typeof currentState.is_active})` : 'not found'}`);
         
-        if (shouldActivate && (!currentState || currentState.is_active === 0)) {
+        if (shouldActivate && (!currentState || currentState.is_active === 0 || currentState.is_active === false)) {
             // Activate the state
             await database.run(`
                 UPDATE character_forms 
@@ -60,7 +60,7 @@ async function checkInnateStateActivation(database, characterId, character) {
             
             console.log(`[SUCCESS] Activated innate state ${state.name} for character ${characterId}`);
             return { activated: true, state: state };
-        } else if (!shouldActivate && currentState && currentState.is_active === 1) {
+        } else if (!shouldActivate && currentState && (currentState.is_active === 1 || currentState.is_active === true)) {
             // Deactivate the state
             await database.run(`
                 UPDATE character_forms 
@@ -71,7 +71,7 @@ async function checkInnateStateActivation(database, characterId, character) {
             console.log(`[SUCCESS] Deactivated innate state ${state.name} for character ${characterId}`);
             return { activated: false, state: state };
         } else {
-            console.log(`[DEBUG] No state change needed for ${state.name} (shouldActivate: ${shouldActivate}, currentlyActive: ${currentState?.is_active || 0})`);
+            console.log(`[DEBUG] No state change needed for ${state.name} (shouldActivate: ${shouldActivate}, currentlyActive: ${currentState?.is_active || 'none'}, condition check: ${shouldActivate && (!currentState || currentState.is_active === 0 || currentState.is_active === false)})`);
         }
     }
     
