@@ -46,18 +46,31 @@ module.exports = {
 
             // Add specialization information
             if (userData.primary_specialization || userData.secondary_specialization) {
+                // Check if character has enhanced specialization (Otherworlder)
+                const isOtherworlder = userData.race === 'Otherworlder';
+                const primaryMultiplier = isOtherworlder ? 0.8 : 0.2;
+                const secondaryMultiplier = isOtherworlder ? 0.4 : 0.1;
+                const primaryPercent = isOtherworlder ? '80%' : '20%';
+                const secondaryPercent = isOtherworlder ? '40%' : '10%';
+                
                 let specializationText = '';
                 if (userData.primary_specialization) {
                     const primaryCap = baseCaps[userData.primary_specialization];
-                    const bonusCap = Math.floor(primaryCap * 0.2);
-                    specializationText += `**Primary ${userData.primary_specialization.charAt(0).toUpperCase() + userData.primary_specialization.slice(1)}:** +${bonusCap} cap (+20%)`;
+                    const bonusCap = Math.floor(primaryCap * primaryMultiplier);
+                    specializationText += `**Primary ${userData.primary_specialization.charAt(0).toUpperCase() + userData.primary_specialization.slice(1)}:** +${bonusCap} cap (+${primaryPercent})`;
                 }
                 if (userData.secondary_specialization) {
                     if (specializationText) specializationText += '\n';
                     const secondaryCap = baseCaps[userData.secondary_specialization];
-                    const bonusCap = Math.floor(secondaryCap * 0.1);
-                    specializationText += `**Secondary ${userData.secondary_specialization.charAt(0).toUpperCase() + userData.secondary_specialization.slice(1)}:** +${bonusCap} cap (+10%)`;
+                    const bonusCap = Math.floor(secondaryCap * secondaryMultiplier);
+                    specializationText += `**Secondary ${userData.secondary_specialization.charAt(0).toUpperCase() + userData.secondary_specialization.slice(1)}:** +${bonusCap} cap (+${secondaryPercent})`;
                 }
+                
+                // Add enhanced specialization note for Otherworlder
+                if (isOtherworlder) {
+                    specializationText += '\n\n✨ **Enhanced Specialization** (Otherworlder)';
+                }
+                
                 embed.addFields({ name: '🎯 Specialization Bonuses', value: specializationText, inline: false });
             } else {
                 embed.addFields({ name: '🎯 Specializations', value: 'None set\nUse `!specialize` to set specializations', inline: false });
