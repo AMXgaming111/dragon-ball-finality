@@ -126,7 +126,7 @@ module.exports = {
 
     // Innate States (automatic states that trigger under certain conditions)
     innateStates: {
-        survivalresponse: {
+        survival: {
             name: 'Survival Response',
             description: 'x1.3 Strength, Defense, and Agility. Control is lowered by 25% and the user gains back 5% of their ki per turn.',
             trigger: 'health_50_percent',
@@ -138,7 +138,7 @@ module.exports = {
                 control_modifier: '*0.75',
                 ki_regen: '+5%'
             },
-            tag: 'survivalresponse'
+            tag: 'survival'
         }
     },
 

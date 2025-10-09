@@ -203,24 +203,6 @@ module.exports = {
                     { name: 'Effort Level', value: `${effort}/5`, inline: true }
                 );
 
-            // Show current stats (with transformed values in parentheses if different)
-            const formatStat = (baseStat, transformedStat) => {
-                if (baseStat === transformedStat) {
-                    return baseStat.toString();
-                } else {
-                    return `${baseStat} (${transformedStat})`;
-                }
-            };
-
-            embed.addFields(
-                { name: 'STR', value: formatStat(baseStats.strength, transformedStats.strength), inline: true },
-                { name: 'DEF', value: formatStat(baseStats.defense, transformedStats.defense), inline: true },
-                { name: 'AGI', value: formatStat(baseStats.agility, transformedStats.agility), inline: true },
-                { name: 'END', value: formatStat(baseStats.endurance, transformedStats.endurance), inline: true },
-                { name: 'CON', value: formatStat(baseStats.control, transformedStats.control), inline: true },
-                { name: '\u200b', value: '\u200b', inline: true } // Empty field for spacing
-            );
-
             // Show current form if active
             if (defenderForm) {
                 embed.addFields({

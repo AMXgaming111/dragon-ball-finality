@@ -659,6 +659,14 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
         }
     }
 
+    // Check for innate state activation (before applying changes)
+    const { checkInnateStateActivation } = require('../utils/innateStates');
+    try {
+        await checkInnateStateActivation(database, characterId, character);
+    } catch (error) {
+        console.error('Error checking innate state activation:', error);
+    }
+
     // Apply changes
     if (healthChange !== 0) {
         const maxHealth = await calculateMaxHealthForCharacter(database, characterId, character.base_pl, character.endurance);

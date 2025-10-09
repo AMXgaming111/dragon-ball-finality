@@ -19,7 +19,7 @@ module.exports = {
                     { name: 'suppression', value: 'Add Suppression Form to existing Arcosian characters', inline: false },
                     { name: 'giantform', value: 'Add Giant Form to existing Namekian characters', inline: false },
                     { name: 'oozaru', value: 'Add Oozaru form to existing Saiyan characters', inline: false },
-                    { name: 'survivalresponse', value: 'Add Survival Response innate state to existing Beastmen characters', inline: false }
+                    { name: 'survival', value: 'Add Survival Response innate state to existing Beastmen characters', inline: false }
                 )
                 .setFooter({ text: 'Migrations are safe to run multiple times' })
                 .setTimestamp();
@@ -416,7 +416,7 @@ module.exports = {
 
                 await message.reply({ embeds: [errorEmbed] });
             }
-        } else if (migrationName === 'survivalresponse') {
+        } else if (migrationName === 'survival') {
             try {
                 const embed = new EmbedBuilder()
                     .setColor(0xffa500)
@@ -434,7 +434,7 @@ module.exports = {
                     isPostgres ?
                         'SELECT * FROM forms WHERE form_key = $1' :
                         'SELECT * FROM forms WHERE form_key = ?',
-                    ['survivalresponse']
+                    ['survival']
                 );
 
                 if (!existingForm) {
@@ -455,7 +455,7 @@ module.exports = {
                             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                             ON CONFLICT (form_key) DO NOTHING
                         `, [
-                            'survivalresponse',
+                            'survival',
                             'Survival Response',
                             '*1.3',           // x1.3 strength
                             '*1.3',           // x1.3 defense
@@ -478,7 +478,7 @@ module.exports = {
                                 is_stackable
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         `, [
-                            'survivalresponse',
+                            'survival',
                             'Survival Response',
                             '*1.3',           // x1.3 strength
                             '*1.3',           // x1.3 defense
@@ -506,7 +506,7 @@ module.exports = {
                         isPostgres ?
                             'SELECT * FROM character_forms WHERE character_id = $1 AND form_key = $2' :
                             'SELECT * FROM character_forms WHERE character_id = ? AND form_key = ?',
-                        [character.id, 'survivalresponse']
+                        [character.id, 'survival']
                     );
 
                     if (!hasForm) {
@@ -515,12 +515,12 @@ module.exports = {
                                 INSERT INTO character_forms (character_id, form_key, is_active)
                                 VALUES ($1, $2, $3)
                                 ON CONFLICT (character_id, form_key) DO NOTHING
-                            `, [character.id, 'survivalresponse', false]);
+                            `, [character.id, 'survival', false]);
                         } else {
                             await database.run(`
                                 INSERT OR IGNORE INTO character_forms (character_id, form_key, is_active)
                                 VALUES (?, ?, ?)
-                            `, [character.id, 'survivalresponse', false]);
+                            `, [character.id, 'survival', false]);
                         }
 
                         grantedCount++;
