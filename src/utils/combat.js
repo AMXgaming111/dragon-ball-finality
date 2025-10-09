@@ -153,6 +153,15 @@ async function resolveDoubleStrike(database, pendingAttack, defenseType, defense
                 [newHealth, targetData.active_character_id]
             );
 
+            // Check for innate state activation after health change
+            try {
+                const { checkInnateStateActivation } = require('./innateStates');
+                const updatedCharacter = await database.get('SELECT * FROM characters WHERE id = ?', [targetData.active_character_id]);
+                await checkInnateStateActivation(database, targetData.active_character_id, updatedCharacter);
+            } catch (error) {
+                console.error('Error checking innate state activation after combat:', error);
+            }
+
             // Update ki cap based on new health percentage - automatically enforce cap
             const { enforceKiCap } = require('./calculations');
             await enforceKiCap(database, pendingAttack.target_character_id);
@@ -285,6 +294,15 @@ async function resolveWeakpoint(database, pendingAttack, defenseType, defenseVal
                 `UPDATE characters SET current_health = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
                 [newHealth, pendingAttack.target_character_id]
             );
+            
+            // Check for innate state activation after health change
+            try {
+                const { checkInnateStateActivation } = require('./innateStates');
+                const updatedCharacter = await database.get('SELECT * FROM characters WHERE id = ?', [pendingAttack.target_character_id]);
+                await checkInnateStateActivation(database, pendingAttack.target_character_id, updatedCharacter);
+            } catch (error) {
+                console.error('Error checking innate state activation after combat:', error);
+            }
             
             // Handle Majin Magic for attacker if damage was dealt
             if (reducedDamage > 0) {
@@ -492,6 +510,15 @@ async function resolveCombat(database, pendingAttack, defenseType, defenseValue,
                 `UPDATE characters SET current_health = ${paramPlaceholder1} WHERE id = ${paramPlaceholder2}`,
                 [newHealth, pendingAttack.target_character_id]
             );
+            
+            // Check for innate state activation after health change
+            try {
+                const { checkInnateStateActivation } = require('./innateStates');
+                const updatedCharacter = await database.get('SELECT * FROM characters WHERE id = ?', [pendingAttack.target_character_id]);
+                await checkInnateStateActivation(database, pendingAttack.target_character_id, updatedCharacter);
+            } catch (error) {
+                console.error('Error checking innate state activation after combat:', error);
+            }
             
             // Process onDamageEffect if damage was actually dealt and effect exists
             if (reducedDamage > 0 && pendingAttack.attack_data && pendingAttack.attack_data.onDamageEffect) {

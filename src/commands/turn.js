@@ -669,7 +669,11 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
     // Check for innate state activation (before applying changes)
     const { checkInnateStateActivation } = require('../utils/innateStates');
     try {
-        await checkInnateStateActivation(database, characterId, character);
+        console.log(`Checking innate state activation for character ${characterId} (race: ${character.race})`);
+        const result = await checkInnateStateActivation(database, characterId, character);
+        if (result) {
+            console.log(`Innate state activation result:`, result);
+        }
     } catch (error) {
         console.error('Error checking innate state activation:', error);
     }
