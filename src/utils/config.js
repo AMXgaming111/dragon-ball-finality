@@ -135,8 +135,7 @@ module.exports = {
                 strength_modifier: '*1.3',
                 defense_modifier: '*1.3', 
                 agility_modifier: '*1.3',
-                control_modifier: '*0.75',
-                ki_regen: '+5%'
+                control_modifier: '*0.75'
             },
             tag: 'survival'
         }

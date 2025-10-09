@@ -617,9 +617,16 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
                 const actualDrain = Math.max(1, baseDrain * (100 / character.control));
                 kiChange -= actualDrain;
             } else if (baseDrain < 0) {
-                // Regular form ki gain (negative drain)
-                const actualGain = Math.abs(baseDrain);
-                kiChange += actualGain;
+                // Regular form ki gain (negative drain) - percentage-based
+                const regenPercentage = Math.abs(baseDrain); // Convert -5 to 5
+                let kiRegen = Math.floor(character.endurance * (regenPercentage / 100));
+                
+                // Apply minimum 1 ki if under 20 endurance (consistent with Suppression Form)
+                if (character.endurance < 20 && kiRegen < 1) {
+                    kiRegen = 1;
+                }
+                
+                kiChange += kiRegen;
             }
         }
         
