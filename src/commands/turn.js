@@ -631,6 +631,34 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
         }
     }
 
+    // Check and apply innate state effects (e.g., Survival Response ki regen)
+    const { innateStates } = require('../utils/config');
+    const activeInnateStates = await database.all(`
+        SELECT cf.form_key FROM character_forms cf
+        WHERE cf.character_id = ? AND cf.is_active = 1
+    `, [characterId]);
+
+    for (const activeState of activeInnateStates) {
+        const stateConfig = innateStates[activeState.form_key];
+        if (stateConfig && stateConfig.modifiers && stateConfig.modifiers.ki_regen) {
+            const regenValue = stateConfig.modifiers.ki_regen;
+            
+            if (regenValue.includes('%')) {
+                // Percentage-based regen (e.g., '+5%')
+                const percentage = parseInt(regenValue.replace(/[+%]/g, ''));
+                let kiRegen = Math.floor(character.endurance * (percentage / 100));
+                
+                // Apply minimum 1 ki if under 20 endurance (same as Suppression Form)
+                if (character.endurance < 20 && kiRegen < 1) {
+                    kiRegen = 1;
+                }
+                
+                kiChange += kiRegen;
+                console.log(`Applied ${stateConfig.name} ki regen: +${kiRegen} ki (${percentage}% of ${character.endurance} endurance)`);
+            }
+        }
+    }
+
     // Apply changes
     if (healthChange !== 0) {
         const maxHealth = await calculateMaxHealthForCharacter(database, characterId, character.base_pl, character.endurance);
