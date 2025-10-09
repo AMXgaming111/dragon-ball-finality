@@ -115,6 +115,12 @@ module.exports = {
             defaultRace: 'Majin',
             tag: 'mmagic'
         },
+        zenkai: {
+            name: 'Zenkai',
+            description: 'When facing an enemy that has a higher pl than them they will increase in pl themselves to match. If the last character you attacked has a higher effective power level than yourself at the end of your turn, your effective PL goes up by 30% (of your base PL). This stops when your effective power level becomes equal to or more than your opponents\' effective power level. Additionally, when you are at 20% health or lower, your bonus to effective PL from this racial (already gained and any additional over the following turns) is increased by 1.4x. This multiplier is removed if you are healed to 21% or more health.',
+            defaultRace: 'Saiyan',
+            tag: 'zenkai'
+        },
         // Racial Variant Specials
         nothingspecial: {
             name: 'Nothing Special',
