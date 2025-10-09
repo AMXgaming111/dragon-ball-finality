@@ -13,7 +13,7 @@ module.exports = {
         }
 
         if (args.length < 4) {
-            return message.reply('Usage: `!sadd <@user> <stat> <+/-/*/set> <value>`\nStats: str, def, agi, end, cont, ap\nExamples: `!sadd @user str + 10`, `!sadd @user def set 20`, `!sadd @user ap + 50`');
+            return message.reply('Usage: `!sadd <@user> <stat> <+/-/*/set> <value>`\nStats: str, def, agi, end, cont\nExamples: `!sadd @user str + 10`, `!sadd @user def set 20`');
         }
 
         // Parse arguments
@@ -32,12 +32,11 @@ module.exports = {
             'def': 'defense',
             'agi': 'agility',
             'end': 'endurance',
-            'cont': 'control',
-            'ap': 'ap'
+            'cont': 'control'
         };
 
         if (!statMap[statAbbr]) {
-            return message.reply('Invalid stat! Use: str, def, agi, end, cont, ap');
+            return message.reply('Invalid stat! Use: str, def, agi, end, cont');
         }
 
         const statName = statMap[statAbbr];
@@ -58,7 +57,7 @@ module.exports = {
 
             const characterId = userData.active_character_id;
             const characterName = userData.name;
-            const currentValue = statName === 'ap' ? (userData[statName] || 0) : userData[statName];
+            const currentValue = userData[statName];
 
             // Parse and apply modifier
             const modifier = parseModifier(operation + value);
@@ -66,9 +65,7 @@ module.exports = {
                 return message.reply('Invalid operation! Use +, -, *, /, or set');
             }
 
-            const newValue = statName === 'ap' 
-                ? Math.max(0, Math.floor(applyModifier(currentValue, modifier)))  // AP can be 0
-                : Math.max(1, Math.floor(applyModifier(currentValue, modifier)));  // Other stats minimum 1
+            const newValue = Math.max(1, Math.floor(applyModifier(currentValue, modifier)));
 
             // Update the character's stat
             const updateQuery = `UPDATE characters SET ${statName} = ? WHERE id = ?`;

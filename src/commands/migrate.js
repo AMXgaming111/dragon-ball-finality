@@ -18,7 +18,8 @@ module.exports = {
                 .addFields(
                     { name: 'suppression', value: 'Add Suppression Form to existing Arcosian characters', inline: false },
                     { name: 'giantform', value: 'Add Giant Form to existing Namekian characters', inline: false },
-                    { name: 'oozaru', value: 'Add Oozaru form to existing Saiyan characters', inline: false }
+                    { name: 'oozaru', value: 'Add Oozaru form to existing Saiyan characters', inline: false },
+                    { name: 'survivalresponse', value: 'Add Survival Response innate state to existing Beastmen characters', inline: false }
                 )
                 .setFooter({ text: 'Migrations are safe to run multiple times' })
                 .setTimestamp();
@@ -401,6 +402,143 @@ module.exports = {
                         { name: 'Already Had Form', value: skippedCount.toString(), inline: true }
                     )
                     .setFooter({ text: 'Saiyans can now use !state oozaru to transform/revert' })
+                    .setTimestamp();
+
+                await response.edit({ embeds: [successEmbed] });
+
+            } catch (error) {
+                console.error('Migration error:', error);
+                const errorEmbed = new EmbedBuilder()
+                    .setColor(0xff0000)
+                    .setTitle('❌ Migration Failed')
+                    .setDescription(`Error: ${error.message}`)
+                    .setTimestamp();
+
+                await message.reply({ embeds: [errorEmbed] });
+            }
+        } else if (migrationName === 'survivalresponse') {
+            try {
+                const embed = new EmbedBuilder()
+                    .setColor(0xffa500)
+                    .setTitle('🔄 Running Survival Response Migration')
+                    .setDescription('Adding Survival Response innate state to existing Beastmen characters...')
+                    .setTimestamp();
+
+                const response = await message.reply({ embeds: [embed] });
+
+                // Check database type once
+                const isPostgres = database.usePostgres || process.env.DATABASE_URL;
+
+                // Check if Survival Response form already exists
+                const existingForm = await database.get(
+                    isPostgres ?
+                        'SELECT * FROM forms WHERE form_key = $1' :
+                        'SELECT * FROM forms WHERE form_key = ?',
+                    ['survivalresponse']
+                );
+
+                if (!existingForm) {
+                    console.log('✨ Creating Survival Response Form...');
+
+                    if (isPostgres) {
+                        // PostgreSQL version with ON CONFLICT
+                        await database.run(`
+                            INSERT INTO forms (
+                                form_key,
+                                name,
+                                strength_modifier,
+                                defense_modifier,
+                                agility_modifier,
+                                control_modifier,
+                                ki_drain,
+                                is_stackable
+                            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                            ON CONFLICT (form_key) DO NOTHING
+                        `, [
+                            'survivalresponse',
+                            'Survival Response',
+                            '*1.3',           // x1.3 strength
+                            '*1.3',           // x1.3 defense
+                            '*1.3',           // x1.3 agility
+                            '*0.75',          // x0.75 control (25% reduction)
+                            '-5',             // Regain 5% ki per turn (negative drain = gain)
+                            false             // Not stackable
+                        ]);
+                    } else {
+                        // SQLite version with OR IGNORE
+                        await database.run(`
+                            INSERT OR IGNORE INTO forms (
+                                form_key,
+                                name,
+                                strength_modifier,
+                                defense_modifier,
+                                agility_modifier,
+                                control_modifier,
+                                ki_drain,
+                                is_stackable
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        `, [
+                            'survivalresponse',
+                            'Survival Response',
+                            '*1.3',           // x1.3 strength
+                            '*1.3',           // x1.3 defense
+                            '*1.3',           // x1.3 agility
+                            '*0.75',          // x0.75 control (25% reduction)
+                            '-5',             // Regain 5% ki per turn (negative drain = gain)
+                            false             // Not stackable
+                        ]);
+                    }
+                }
+
+                // Find existing Beastmen characters
+                const beastmenCharacters = await database.all(
+                    isPostgres ?
+                        'SELECT id, name, owner_id FROM characters WHERE race = $1' :
+                        'SELECT id, name, owner_id FROM characters WHERE race = ?',
+                    ['Beastmen']
+                );
+
+                let grantedCount = 0;
+                let skippedCount = 0;
+
+                for (const character of beastmenCharacters) {
+                    const hasForm = await database.get(
+                        isPostgres ?
+                            'SELECT * FROM character_forms WHERE character_id = $1 AND form_key = $2' :
+                            'SELECT * FROM character_forms WHERE character_id = ? AND form_key = ?',
+                        [character.id, 'survivalresponse']
+                    );
+
+                    if (!hasForm) {
+                        if (isPostgres) {
+                            await database.run(`
+                                INSERT INTO character_forms (character_id, form_key, is_active)
+                                VALUES ($1, $2, $3)
+                                ON CONFLICT (character_id, form_key) DO NOTHING
+                            `, [character.id, 'survivalresponse', false]);
+                        } else {
+                            await database.run(`
+                                INSERT OR IGNORE INTO character_forms (character_id, form_key, is_active)
+                                VALUES (?, ?, ?)
+                            `, [character.id, 'survivalresponse', false]);
+                        }
+
+                        grantedCount++;
+                    } else {
+                        skippedCount++;
+                    }
+                }
+
+                const successEmbed = new EmbedBuilder()
+                    .setColor(0x00ff00)
+                    .setTitle('✅ Migration Complete!')
+                    .setDescription('Successfully added Survival Response to Beastmen characters')
+                    .addFields(
+                        { name: 'Total Beastmen', value: beastmenCharacters.length.toString(), inline: true },
+                        { name: 'Innate States Granted', value: grantedCount.toString(), inline: true },
+                        { name: 'Already Had State', value: skippedCount.toString(), inline: true }
+                    )
+                    .setFooter({ text: 'Survival Response auto-activates at ≤50% health for Beastmen' })
                     .setTimestamp();
 
                 await response.edit({ embeds: [successEmbed] });

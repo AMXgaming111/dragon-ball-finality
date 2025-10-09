@@ -407,15 +407,21 @@ function calculateBlowback(attackDamage, kiPercentageUsed) {
     return 0;
 }
 
-// Get racial ability for a race
+// Get racial ability for a race (including variants)
 function getRacialForRace(race) {
+    const { racialVariants } = require('./config');
+    
     const raceRacialMap = {
         'Saiyan': 'zenkai',
         'Human': 'hspirit',
         'Namekian': 'nphys',
         'Synthetic Majin': 'mregen',
         'Arcosian': 'aresist',
-        'Majin': 'mmagic'
+        'Majin': 'mmagic',
+        // Racial Variants
+        'Otherworlder': 'nothingspecial',  // Otherworlder gets Nothing Special instead of Human Spirit
+        'Monster': 'mmagic',               // Monster inherits from Majin
+        'Beastmen': 'hspirit'              // Beastmen inherits Human Spirit from Human
     };
     
     return raceRacialMap[race] || null;
@@ -914,10 +920,11 @@ async function getTransformedStats(database, characterId, baseStats) {
 
 // Calculate stat caps for AP system based on race, specializations, and advanced ki control
 function calculateStatCaps(character) {
-    const { racialCaps } = require('./config');
+    const { racialCaps, racialVariants } = require('./config');
     
-    // Get base racial caps
+    // Use variant's own caps, not the primary race caps
     const baseCaps = racialCaps[character.race];
+    
     if (!baseCaps) {
         throw new Error(`Unknown race: ${character.race}`);
     }
@@ -933,18 +940,23 @@ function calculateStatCaps(character) {
         // Control cap remains the same
     }
     
+    // Enhanced specialization bonuses for Otherworlder variant
+    const isOtherworlder = character.race === 'Otherworlder';
+    const primaryBonus = isOtherworlder ? 1.8 : 1.2; // 80% vs 20% for primary
+    const secondaryBonus = isOtherworlder ? 1.4 : 1.1; // 40% vs 10% for secondary
+    
     // Apply specialization bonuses
     if (character.primary_specialization) {
         const stat = character.primary_specialization;
         if (caps[stat] !== undefined) {
-            caps[stat] = Math.floor(caps[stat] * 1.2); // 20% increase
+            caps[stat] = Math.floor(caps[stat] * primaryBonus);
         }
     }
     
     if (character.secondary_specialization) {
         const stat = character.secondary_specialization;
         if (caps[stat] !== undefined) {
-            caps[stat] = Math.floor(caps[stat] * 1.1); // 10% increase
+            caps[stat] = Math.floor(caps[stat] * secondaryBonus);
         }
     }
     

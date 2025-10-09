@@ -62,8 +62,8 @@ module.exports = {
                         { name: 'Base PL', value: userData.base_pl.toString(), inline: false }
                     );
 
-                // Format stats as current (transformed) if different, otherwise just current
-                const formatStat = (baseStat, transformedStat) => {
+                // Add stats with transformed values in parentheses if different
+                const formatStat = (baseStat, transformedStat, statName) => {
                     if (baseStat === transformedStat) {
                         return baseStat.toString();
                     } else {
@@ -77,11 +77,10 @@ module.exports = {
                     { name: 'Agility', value: formatStat(baseStats.agility, transformedStats.agility), inline: true },
                     { name: 'Endurance', value: formatStat(baseStats.endurance, transformedStats.endurance), inline: true },
                     { name: 'Control', value: formatStat(baseStats.control, transformedStats.control), inline: true },
-                    { name: 'AP', value: (userData.ap || 0).toString(), inline: true },
                     { name: 'Race', value: userData.race, inline: true }
                 );
 
-                // Show current state if active
+                // Show current form if active
                 if (activeForm) {
                     embed.addFields({
                         name: 'Current State',
