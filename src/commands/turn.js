@@ -453,6 +453,9 @@ async function applyEndOfTurnEffects(characterId, database, channelId) {
 
     if (!character) return;
 
+    console.log(`[DEBUG] Turn effects for character ${characterId} (${character.name})`);
+    console.log(`[DEBUG] Race: ${character.race}, Current Health: ${character.current_health}, Base PL: ${character.base_pl}, Endurance: ${character.endurance}`);
+
     let healthChange = 0;
     let kiChange = 0;
     const racials = character.racials ? character.racials.split(',') : [];

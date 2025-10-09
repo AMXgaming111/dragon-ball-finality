@@ -34,15 +34,21 @@ async function grantInnateStates(database, characterId, race) {
  */
 async function checkInnateStateActivation(database, characterId, character) {
     const raceStates = getInnateStatesForRace(character.race);
+    console.log(`[DEBUG] Checking innate states for ${character.race} character ID ${characterId}`);
+    console.log(`[DEBUG] Found ${raceStates.length} innate states for race: ${raceStates.map(s => s.name).join(', ')}`);
     
     for (const state of raceStates) {
-        const shouldActivate = checkStateTrigger(state, character);
+        console.log(`[DEBUG] Checking state: ${state.name} (${state.tag}) with trigger: ${state.trigger}`);
+        const shouldActivate = await checkStateTrigger(state, character, database);
+        console.log(`[DEBUG] Should activate ${state.name}: ${shouldActivate}`);
         
         // Check current state
         const currentState = await database.get(`
             SELECT is_active FROM character_forms 
             WHERE character_id = ? AND form_key = ?
         `, [characterId, state.tag]);
+        
+        console.log(`[DEBUG] Current state for ${state.name}: ${currentState ? `active=${currentState.is_active}` : 'not found'}`);
         
         if (shouldActivate && (!currentState || currentState.is_active === 0)) {
             // Activate the state
@@ -52,7 +58,7 @@ async function checkInnateStateActivation(database, characterId, character) {
                 WHERE character_id = ? AND form_key = ?
             `, [characterId, state.tag]);
             
-            console.log(`Activated innate state ${state.name} for character ${characterId}`);
+            console.log(`[SUCCESS] Activated innate state ${state.name} for character ${characterId}`);
             return { activated: true, state: state };
         } else if (!shouldActivate && currentState && currentState.is_active === 1) {
             // Deactivate the state
@@ -62,8 +68,10 @@ async function checkInnateStateActivation(database, characterId, character) {
                 WHERE character_id = ? AND form_key = ?
             `, [characterId, state.tag]);
             
-            console.log(`Deactivated innate state ${state.name} for character ${characterId}`);
+            console.log(`[SUCCESS] Deactivated innate state ${state.name} for character ${characterId}`);
             return { activated: false, state: state };
+        } else {
+            console.log(`[DEBUG] No state change needed for ${state.name} (shouldActivate: ${shouldActivate}, currentlyActive: ${currentState?.is_active || 0})`);
         }
     }
     
@@ -73,12 +81,14 @@ async function checkInnateStateActivation(database, characterId, character) {
 /**
  * Check if a state's trigger condition is met
  */
-function checkStateTrigger(state, character) {
+async function checkStateTrigger(state, character, database) {
     switch (state.trigger) {
         case 'health_50_percent':
-            const maxHealth = character.base_pl * character.endurance;
+            const { calculateMaxHealthForCharacter } = require('./calculations');
+            const maxHealth = await calculateMaxHealthForCharacter(database, character.id, character.base_pl, character.endurance);
             const currentHealth = character.current_health || maxHealth;
             const healthPercentage = (currentHealth / maxHealth) * 100;
+            console.log(`[DEBUG] Health Check: ${currentHealth}/${maxHealth} = ${healthPercentage.toFixed(1)}% (trigger at ≤50%)`);
             return healthPercentage <= 50;
         
         // Add more trigger types as needed
