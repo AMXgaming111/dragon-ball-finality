@@ -17,8 +17,9 @@ async function grantInnateStates(database, characterId, race) {
         try {
             // Create the innate state in character_forms table (reusing forms system for states)
             await database.run(`
-                INSERT OR IGNORE INTO character_forms (character_id, form_key, is_active) 
+                INSERT INTO character_forms (character_id, form_key, is_active) 
                 VALUES (?, ?, ?)
+                ON CONFLICT (character_id, form_key) DO NOTHING
             `, [characterId, state.tag, 0]); // Start inactive, will activate based on conditions
             
             console.log(`Granted innate state ${state.name} to character ${characterId}`);

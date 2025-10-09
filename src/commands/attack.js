@@ -509,12 +509,12 @@ async function handleBasicPhysicalAttack(interaction, attackerData, targetData, 
     }
 
     // Calculate damage and accuracy using transformed stats with modifiers
-    const effectiveStrengthWithModifier = Math.max(1, attackerTransformedStats.strength + damageModifier);
+    const effectiveStrengthWithModifier = Math.max(1, effectiveStats.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, additive, database, attackerData.active_character_id);
     
     // Calculate accuracy with both old and new agility modifiers using transformed agility
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerTransformedStats.agility + totalAgilityModifier, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, effectiveStats.agility + totalAgilityModifier, 0, false);
     
     // Apply effort, accuracy multiplier, and new roll modifiers
     const damage = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
@@ -744,10 +744,10 @@ async function handleTechniqueSelection(interaction, attackerData, targetData, a
             await handleGuard(interaction, attackerData, targetData, database);
             break;
         case 'hblow':
-            await handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+            await handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, attackerTransformedStats, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'feint':
-            await handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
+            await handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, attackerTransformedStats, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
             break;
         case 'wpoint':
             await handleWeakpoint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier, damageRollMultiplier, controlModifier, controlRollMultiplier, accuracyAgilityModifier, accuracyRollMultiplier);
@@ -1216,13 +1216,13 @@ async function handleGuard(interaction, attackerData, targetData, database) {
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleHeavyBlow(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, effectiveStats, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Heavy Blow - Normal attack + agility debuff if damage dealt (FREE) - with modifiers
-    const effectiveStrengthWithModifier = Math.max(1, attackerTransformedStats.strength + damageModifier);
+    const effectiveStrengthWithModifier = Math.max(1, effectiveStats.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
     
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerTransformedStats.agility + totalAgilityModifier, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, effectiveStats.agility + totalAgilityModifier, 0, false);
     
     const damage = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
@@ -1296,13 +1296,13 @@ async function handleHeavyBlow(interaction, attackerData, targetData, attackerEf
     await addEndTurnButtons(interaction, embed, attackerData, database);
 }
 
-async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
+async function handleFeint(interaction, attackerData, targetData, attackerEffectivePL, accuracyMultiplier, agilityModifier, effort, database, effectiveStats, damageModifier = 0, damageRollMultiplier = 1, controlModifier = 0, controlRollMultiplier = 1, accuracyAgilityModifier = 0, accuracyRollMultiplier = 1) {
     // Feint - Attack with dodge penalty (FREE) - with modifiers
-    const effectiveStrengthWithModifier = Math.max(1, attackerTransformedStats.strength + damageModifier);
+    const effectiveStrengthWithModifier = Math.max(1, effectiveStats.strength + damageModifier);
     const baseDamage = await calculatePhysicalAttack(attackerEffectivePL, effectiveStrengthWithModifier, 0, database, attackerData.active_character_id);
     
     const totalAgilityModifier = agilityModifier + accuracyAgilityModifier;
-    const baseAccuracy = calculateAccuracy(attackerEffectivePL, attackerTransformedStats.agility + totalAgilityModifier, 0, false);
+    const baseAccuracy = calculateAccuracy(attackerEffectivePL, effectiveStats.agility + totalAgilityModifier, 0, false);
     
     const damage = rollWithEffort(baseDamage, effort) * damageRollMultiplier;
     const accuracy = rollWithEffort(baseAccuracy * accuracyMultiplier, effort) * accuracyRollMultiplier;
